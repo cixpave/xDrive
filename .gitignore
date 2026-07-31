@@ -1,0 +1,9 @@
+# runtime state — stays on the drive, not in git
+config.json
+data/
+models/
+docs-offline/
+mirrors/
+__pycache__/
+*.pyc
+nohup.out
