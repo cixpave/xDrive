@@ -1,11 +1,13 @@
-# Ember — your offline AI assistant
+# xDrive — offline AI terminal
 
 <p align="center"><strong>Code · Chat · Agent — 100% local, 100% offline.</strong></p>
 
-Ember is a self-contained AI assistant that lives entirely on your hard
+xDrive is a self-contained AI assistant that lives entirely on your hard
 drive. It handles coding tasks and general questions, runs on **Arch Linux**
 and **Windows**, and needs **no internet** once models are downloaded — a
-modern black & white interface with an ember-orange accent.
+hacker/terminal interface in black & white with a Claude-orange accent:
+live clock, system readouts, session list, network status, and an activity
+feed around a central AI terminal.
 
 - **Zero dependencies** — the app is pure Python standard library + vanilla
   JS. If you have Python 3.8+, it runs. No pip, no node, no build step.
@@ -18,8 +20,7 @@ modern black & white interface with an ember-orange accent.
 - **Everything on the drive** — model weights, conversations, settings, and
   the agent workspace all live alongside the app, so the whole assistant
   travels with your 5TB drive.
-- **Dark & light themes** — black-first design with a white theme one click
-  away; orange accent throughout.
+- **INVERT** — black terminal by default; one click flips to a white theme.
 
 ## Quick start
 
@@ -45,12 +46,12 @@ The UI opens at [http://127.0.0.1:8484](http://127.0.0.1:8484).
 ## How it works
 
 ```
-┌──────────────┐   SSE stream    ┌───────────────┐   OpenAI API   ┌──────────────┐
-│  Web UI      │ ◄────────────── │ ember/server  │ ◄────────────► │ Ollama or    │
-│  (black/     │ ──────────────► │  (Python      │                │ llama-server │
-│  white/      │    fetch        │   stdlib)     │                │  + models on │
-│  orange)     │                 │               │                │  this drive  │
-└──────────────┘                 └──────┬────────┘                └──────────────┘
+┌──────────────┐   SSE stream    ┌────────────────┐   OpenAI API   ┌──────────────┐
+│  Terminal UI │ ◄────────────── │ xdrive/server  │ ◄────────────► │ Ollama or    │
+│  (black/     │ ──────────────► │  (Python       │                │ llama-server │
+│  white/      │    fetch        │   stdlib)      │                │  + models on │
+│  orange)     │                 │                │                │  this drive  │
+└──────────────┘                 └──────┬─────────┘                └──────────────┘
                                         │
                               data/conversations/  (chat history, JSON)
                               data/workspace/      (agent sandbox)
@@ -60,8 +61,8 @@ Everything binds to `127.0.0.1` only — nothing is exposed to the network.
 
 ## Agent mode
 
-Flip the **Agent mode** toggle and the model gains four tools, all confined
-to `data/workspace/` on the drive:
+Flip the **AGENT MODE** toggle in the MODEL panel and the model gains four
+tools, all confined to `data/workspace/` on the drive:
 
 | Tool | What it does |
 |---|---|
@@ -71,9 +72,9 @@ to `data/workspace/` on the drive:
 | `run_command` | run a shell command (with a timeout) |
 
 Ask it to *"create a Flask app with a /health endpoint and test it"* and
-watch it write the files and run them. Tool activity shows up as expandable
-cards in the chat. Only enable it when you want it — `run_command` executes
-real commands on your machine.
+watch it write the files and run them. Tool executions show up as expandable
+`EXEC` cards in the terminal and in the ACTIVITY feed. Only enable it when
+you want it — `run_command` executes real commands on your machine.
 
 ## Models
 
@@ -85,7 +86,7 @@ documentation (Wikipedia, Stack Overflow) to pair with it.
 ## Configuration
 
 Settings live in `config.json` (auto-created on first run) and most can be
-changed from the ⚙ settings panel in the UI:
+changed from the CONFIG panel in the UI:
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -96,13 +97,13 @@ changed from the ⚙ settings panel in the UI:
 | `data_dir` | `data` | where conversations + workspace live |
 | `max_tool_steps` | `8` | agent-mode iteration cap per message |
 | `command_timeout` | `120` | seconds before a command is killed |
-| `port` | `8484` | UI port (or set `EMBER_PORT`) |
+| `port` | `8484` | UI port (or set `XDRIVE_PORT`) |
 
 ## Project layout
 
 ```
-ember/server.py   the entire backend (single file, stdlib only)
-web/              the UI (index.html, style.css, app.js, bundled libs)
+xdrive/server.py  the entire backend (single file, stdlib only)
+web/              the terminal UI (index.html, style.css, app.js, bundled libs)
 scripts/          one-time setup + model download for Arch and Windows
 docs/MODELS.md    model recommendations for a 5TB drive
 start.sh          launcher (Linux)

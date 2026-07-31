@@ -33,5 +33,5 @@ for m in "${CORE_MODELS[@]}"; do
 done
 
 echo
-echo "All core models downloaded. Ember is now fully offline-capable."
+echo "All core models downloaded. xDrive is now fully offline-capable."
 echo "See docs/MODELS.md for optional extras to fill out the 5TB drive."

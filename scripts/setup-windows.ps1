@@ -1,4 +1,4 @@
-# One-time setup on Windows (needs internet ONCE; Ember runs offline after).
+# One-time setup on Windows (needs internet ONCE; xDrive runs offline after).
 # Installs Python + Ollama and points Ollama's model store at this drive.
 # Run from PowerShell:  powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1
 
@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 $DriveDir = Split-Path -Parent $PSScriptRoot
 Set-Location $DriveDir
 
-Write-Host "-- Ember setup (Windows) ------------------------------"
+Write-Host "-- xDrive setup (Windows) ------------------------------"
 Write-Host "Drive location: $DriveDir"
 
 # Python
@@ -32,4 +32,4 @@ Write-Host "Done. Next steps:"
 Write-Host "  1. Close and reopen your terminal (so OLLAMA_MODELS takes effect)."
 Write-Host "  2. Download models while you still have internet:"
 Write-Host "       powershell -ExecutionPolicy Bypass -File scripts\pull-models.ps1"
-Write-Host "  3. Launch Ember any time (works offline): double-click start.bat"
+Write-Host "  3. Launch xDrive any time (works offline): double-click start.bat"

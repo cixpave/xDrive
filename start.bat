@@ -1,9 +1,9 @@
 @echo off
-rem Ember launcher — Windows
+rem xDrive launcher — Windows
 setlocal
 cd /d "%~dp0"
 
-if not defined EMBER_PORT set EMBER_PORT=8484
+if not defined XDRIVE_PORT set XDRIVE_PORT=8484
 
 rem Find a Python interpreter (py launcher first, then python).
 set PY=
@@ -34,6 +34,6 @@ if %errorlevel%==0 (
     )
 )
 
-start "" "http://127.0.0.1:%EMBER_PORT%"
-%PY% ember\server.py
+start "" "http://127.0.0.1:%XDRIVE_PORT%"
+%PY% xdrive\server.py
 pause

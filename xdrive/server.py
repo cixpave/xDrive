@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ember — a fully offline AI assistant.
+"""xDrive — a fully offline AI assistant.
 
 A single-file, zero-dependency (Python stdlib only) local server that:
   * serves the Ember web UI
@@ -28,7 +28,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-APP_NAME = "Ember"
+APP_NAME = "xDrive"
 ROOT = Path(__file__).resolve().parent.parent
 WEB_DIR = ROOT / "web"
 CONFIG_PATH = ROOT / "config.json"
@@ -43,7 +43,7 @@ DEFAULT_CONFIG = {
     "default_model": "",
     "temperature": 0.7,
     "system_prompt": (
-        "You are Ember, a helpful offline AI assistant. You are skilled at "
+        "You are xDrive, a helpful offline AI assistant. You are skilled at "
         "programming, debugging, and explaining technical topics, and equally "
         "comfortable with general questions. Answer directly and format code "
         "in fenced blocks with a language tag."
@@ -539,12 +539,12 @@ def main():
     workspace_dir(cfg)
 
     host = cfg.get("host", "127.0.0.1")
-    port = int(os.environ.get("EMBER_PORT", cfg.get("port", 8484)))
+    port = int(os.environ.get("XDRIVE_PORT", cfg.get("port", 8484)))
     server = ThreadingHTTPServer((host, port), Handler)
 
     url, kind, models = resolve_backend(cfg)
     print(f"  ┌─────────────────────────────────────────────┐")
-    print(f"  │  {APP_NAME} — offline AI assistant              │")
+    print(f"  │  {APP_NAME} — offline AI assistant             │")
     print(f"  └─────────────────────────────────────────────┘")
     print(f"  UI:        http://{host}:{port}")
     if url:

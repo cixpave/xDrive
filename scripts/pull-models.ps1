@@ -34,5 +34,5 @@ foreach ($m in $CoreModels) {
 }
 
 Write-Host ""
-Write-Host "All core models downloaded. Ember is now fully offline-capable."
+Write-Host "All core models downloaded. xDrive is now fully offline-capable."
 Write-Host "See docs\MODELS.md for optional extras to fill out the 5TB drive."

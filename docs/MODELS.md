@@ -1,6 +1,6 @@
 # Model guide — filling a 5TB drive well
 
-Ember talks to any local runtime that speaks the OpenAI chat API. The easiest
+xDrive talks to any local runtime that speaks the OpenAI chat API. The easiest
 is **Ollama**; **llama.cpp** (`llama-server`) also works out of the box.
 
 All model weights live on this drive in `models/ollama/` (the setup scripts
@@ -48,7 +48,7 @@ Suggested drive layout:
 
 ```
 xDrive/
-├── ember/           the app
+├── xdrive/          the app
 ├── web/             the UI
 ├── models/ollama/   model weights            (~0.3–2 TB)
 ├── docs-offline/    Kiwix ZIMs, DevDocs      (~0.3 TB)
@@ -70,7 +70,7 @@ memory, plus a little for context.
 
 ## Using llama.cpp instead of Ollama
 
-Ember auto-detects `llama-server` on port 8080:
+xDrive auto-detects `llama-server` on port 8080:
 
 ```bash
 llama-server -m models/gguf/qwen2.5-coder-14b-q4_k_m.gguf -c 8192 --port 8080

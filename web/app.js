@@ -1,4 +1,4 @@
-/* Ember — offline AI assistant (frontend) */
+/* xDrive — offline AI terminal (frontend) */
 "use strict";
 
 const $ = (id) => document.getElementById(id);
@@ -15,7 +15,8 @@ const els = {
   agentMode: $("agent-mode"),
   statusDot: $("status-dot"),
   statusText: $("status-text"),
-  sidebar: $("sidebar"),
+  streamState: $("stream-state"),
+  activity: $("activity"),
 };
 
 const state = {
@@ -23,9 +24,40 @@ const state = {
   streaming: false,
   abort: null,
   online: false,
+  bootedAt: Date.now(),
 };
 
 marked.setOptions({ breaks: true, gfm: true });
+
+/* ───────── clock / uptime ───────── */
+
+function tickClock() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  $("clock").textContent =
+    `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  $("sys-date").textContent =
+    `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const up = Math.floor((Date.now() - state.bootedAt) / 1000);
+  $("sys-uptime").textContent =
+    `${pad(Math.floor(up / 3600))}:${pad(Math.floor((up % 3600) / 60))}:${pad(up % 60)}`;
+}
+
+/* ───────── activity log ───────── */
+
+function logActivity(text, dim = false) {
+  const line = document.createElement("div");
+  line.className = "act-line" + (dim ? " dim" : "");
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const time = document.createElement("span");
+  time.className = "act-time";
+  time.textContent = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  line.append(time, document.createTextNode(text));
+  els.activity.append(line);
+  while (els.activity.children.length > 200) els.activity.firstChild.remove();
+  els.activity.scrollTop = els.activity.scrollHeight;
+}
 
 /* ───────── markdown rendering ───────── */
 
@@ -53,11 +85,11 @@ function renderMarkdown(text) {
     label.textContent = lang;
     const copy = document.createElement("button");
     copy.className = "copy-btn";
-    copy.textContent = "copy";
+    copy.textContent = "COPY";
     copy.addEventListener("click", () => {
       navigator.clipboard.writeText(code.textContent).then(() => {
-        copy.textContent = "copied!";
-        setTimeout(() => (copy.textContent = "copy"), 1400);
+        copy.textContent = "COPIED";
+        setTimeout(() => (copy.textContent = "COPY"), 1400);
       });
     });
     head.append(label, copy);
@@ -72,10 +104,10 @@ function renderMarkdown(text) {
 function addUserMessage(text) {
   const msg = document.createElement("div");
   msg.className = "msg user";
-  const bubble = document.createElement("div");
-  bubble.className = "bubble";
-  bubble.textContent = text;
-  msg.append(bubble);
+  const line = document.createElement("div");
+  line.className = "u-line";
+  line.textContent = text;
+  msg.append(line);
   els.messages.append(msg);
   scrollToBottom();
 }
@@ -85,7 +117,7 @@ function addAssistantShell() {
   msg.className = "msg assistant";
   const head = document.createElement("div");
   head.className = "msg-head";
-  head.innerHTML = `<span class="dot"></span> EMBER`;
+  head.textContent = "xDRIVE";
   const content = document.createElement("div");
   content.className = "content";
   msg.append(head, content);
@@ -98,7 +130,9 @@ function addToolCard(container, name, args) {
   const card = document.createElement("details");
   card.className = "tool-card";
   const summary = document.createElement("summary");
-  summary.textContent = `${name} ${JSON.stringify(args ?? {}).slice(0, 120)}`;
+  summary.textContent = args
+    ? `${name} ${JSON.stringify(args).slice(0, 110)}`
+    : name;
   const pre = document.createElement("pre");
   pre.textContent = "running…";
   card.append(summary, pre);
@@ -123,19 +157,33 @@ function nearBottom() {
   return els.chat.scrollHeight - els.chat.scrollTop - els.chat.clientHeight < 120;
 }
 
+function setStreamState(live) {
+  els.streamState.textContent = live ? "▓ STREAMING" : "IDLE";
+  els.streamState.classList.toggle("live", live);
+}
+
 /* ───────── status / models ───────── */
 
 async function refreshStatus() {
   try {
     const res = await fetch("/api/status");
     const s = await res.json();
+    const wasOnline = state.online;
     state.online = s.online;
     els.statusDot.className = "status-dot " + (s.online ? "on" : "off");
-    els.statusText.textContent = s.online
-      ? `${s.backend_kind} · ${s.models.length} model(s)`
-      : "no model runtime";
+    els.statusText.textContent = s.online ? "UP" : "DOWN";
+    $("sys-backend").textContent = s.online ? s.backend_kind.toUpperCase() : "NONE";
+    $("sys-models").textContent = s.models.length;
+    $("net-state").textContent = s.online ? "AIR·GAPPED" : "NO RUNTIME";
+    $("net-state").className = s.online ? "on" : "";
+    $("boot-runtime").textContent = s.online
+      ? `> runtime online: ${s.backend_kind} · ${s.models.length} model(s) loaded`
+      : "> no LLM runtime found — start ollama or llama-server";
     els.offlineNote.hidden = s.online;
+    $("ws-path").textContent = s.workspace || "—";
     $("set-workspace").textContent = s.workspace || "";
+    $("bar-port").textContent = location.host;
+
     const current = els.modelSelect.value;
     els.modelSelect.innerHTML = "";
     for (const m of s.models) {
@@ -148,10 +196,19 @@ async function refreshStatus() {
     else if (s.default_model && s.models.includes(s.default_model)) {
       els.modelSelect.value = s.default_model;
     }
+    updateModelReadouts();
+    if (s.online && !wasOnline) logActivity(`runtime up: ${s.backend_kind}`);
+    if (!s.online && wasOnline) logActivity("runtime down", true);
   } catch (_) {
     els.statusDot.className = "status-dot off";
-    els.statusText.textContent = "server unreachable";
+    els.statusText.textContent = "ERR";
   }
+}
+
+function updateModelReadouts() {
+  const m = els.modelSelect.value || "NO MODEL";
+  $("top-model").textContent = m.toUpperCase();
+  $("bar-model").textContent = m;
 }
 
 /* ───────── conversations ───────── */
@@ -165,14 +222,15 @@ async function refreshConversations() {
     row.className = "conv-item" + (c.id === state.conversationId ? " active" : "");
     const title = document.createElement("span");
     title.className = "conv-title";
-    title.textContent = c.title || "Untitled";
+    title.textContent = c.title || "untitled";
     const del = document.createElement("button");
     del.className = "conv-del";
     del.textContent = "✕";
-    del.title = "Delete conversation";
+    del.title = "Delete session";
     del.addEventListener("click", async (e) => {
       e.stopPropagation();
       await fetch(`/api/conversations/${c.id}`, { method: "DELETE" });
+      logActivity(`session deleted: ${c.id}`, true);
       if (c.id === state.conversationId) newChat();
       refreshConversations();
     });
@@ -253,6 +311,8 @@ async function sendMessage() {
 
   state.streaming = true;
   setSendButton(true);
+  setStreamState(true);
+  logActivity(`query sent (${els.agentMode.checked ? "agent" : "chat"})`);
   const controller = new AbortController();
   state.abort = controller;
 
@@ -277,7 +337,7 @@ async function sendMessage() {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      addError(content, err.error || `Request failed (${res.status})`);
+      addError(content, err.error || `request failed (${res.status})`);
       return;
     }
 
@@ -306,41 +366,41 @@ async function sendMessage() {
         } else if (ev.type === "tool_call") {
           renderLive(true);
           toolPre = addToolCard(content, ev.name, ev.args);
+          logActivity(`tool: ${ev.name}`);
           startLiveBlock();
         } else if (ev.type === "tool_result") {
           if (toolPre) toolPre.textContent = ev.output;
+          logActivity(`tool done: ${ev.name}`, true);
           scrollToBottom();
         } else if (ev.type === "error") {
           renderLive(true);
           addError(content, ev.message);
+          logActivity(`error: ${ev.message}`, true);
         } else if (ev.type === "done") {
           break;
         }
       }
     }
   } catch (err) {
-    if (err.name !== "AbortError") addError(content, `Connection lost: ${err.message}`);
+    if (err.name !== "AbortError") addError(content, `connection lost: ${err.message}`);
+    else logActivity("stream aborted by user", true);
   } finally {
     if (renderTimer) clearTimeout(renderTimer);
     renderLive(true);
     state.streaming = false;
     state.abort = null;
     setSendButton(false);
+    setStreamState(false);
+    logActivity("response complete", true);
     refreshConversations();
     els.input.focus();
   }
 }
 
 function setSendButton(streaming) {
-  if (streaming) {
-    els.send.classList.add("stop");
-    els.send.title = "Stop";
-    els.send.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></svg>`;
-  } else {
-    els.send.classList.remove("stop");
-    els.send.title = "Send";
-    els.send.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M3.4 20.4 22 12 3.4 3.6 3.4 10l13 2-13 2z"/></svg>`;
-  }
+  els.send.textContent = streaming ? "ABORT" : "EXEC";
+  els.send.classList.toggle("stop", streaming);
+  els.send.title = streaming ? "Abort stream" : "Send [Enter]";
 }
 
 /* ───────── settings ───────── */
@@ -366,6 +426,7 @@ async function saveSettings() {
     }),
   });
   $("settings-modal").hidden = true;
+  logActivity("config written");
   refreshStatus();
 }
 
@@ -373,14 +434,14 @@ async function saveSettings() {
 
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
-  localStorage.setItem("ember-theme", theme);
+  localStorage.setItem("xdrive-theme", theme);
 }
 
 /* ───────── input behavior ───────── */
 
 function autosize() {
   els.input.style.height = "auto";
-  els.input.style.height = Math.min(els.input.scrollHeight, 220) + "px";
+  els.input.style.height = Math.min(els.input.scrollHeight, 200) + "px";
 }
 
 /* ───────── wire-up ───────── */
@@ -396,6 +457,13 @@ els.input.addEventListener("keydown", (e) => {
   }
 });
 els.input.addEventListener("input", autosize);
+els.modelSelect.addEventListener("change", () => {
+  updateModelReadouts();
+  logActivity(`model set: ${els.modelSelect.value}`, true);
+});
+els.agentMode.addEventListener("change", () => {
+  logActivity(`agent mode ${els.agentMode.checked ? "ENABLED" : "disabled"}`);
+});
 
 $("btn-new").addEventListener("click", newChat);
 $("btn-theme").addEventListener("click", () => {
@@ -407,15 +475,10 @@ $("btn-save-settings").addEventListener("click", saveSettings);
 $("settings-modal").addEventListener("click", (e) => {
   if (e.target === $("settings-modal")) $("settings-modal").hidden = true;
 });
-$("btn-collapse").addEventListener("click", () => {
-  els.sidebar.classList.add("collapsed");
-  $("btn-expand").hidden = false;
+document.querySelector(".sys .kv:last-child").addEventListener("click", () => {
+  logActivity("rescanning runtime…", true);
+  refreshStatus();
 });
-$("btn-expand").addEventListener("click", () => {
-  els.sidebar.classList.remove("collapsed");
-  $("btn-expand").hidden = true;
-});
-document.querySelector(".status-row").addEventListener("click", refreshStatus);
 document.querySelectorAll(".chip").forEach((chip) => {
   chip.addEventListener("click", () => {
     els.input.value = chip.dataset.fill.replaceAll("\\n", "\n");
@@ -424,8 +487,11 @@ document.querySelectorAll(".chip").forEach((chip) => {
   });
 });
 
-applyTheme(localStorage.getItem("ember-theme") || "dark");
+applyTheme(localStorage.getItem("xdrive-theme") || "dark");
+tickClock();
+setInterval(tickClock, 1000);
 refreshStatus();
 refreshConversations();
 setInterval(refreshStatus, 20000);
+logActivity("xDrive terminal ready");
 els.input.focus();

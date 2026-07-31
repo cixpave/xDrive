@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Ember launcher — Linux (Arch and friends)
+# xDrive launcher — Linux (Arch and friends)
 set -euo pipefail
 cd "$(dirname "$0")"
 
-PORT="${EMBER_PORT:-8484}"
+PORT="${XDRIVE_PORT:-8484}"
 
 if ! command -v python3 >/dev/null 2>&1; then
     echo "Error: python3 not found. Install it with:  sudo pacman -S python"
@@ -27,4 +27,4 @@ fi
 # Open the UI in the default browser once the server is up.
 ( sleep 1.5; xdg-open "http://127.0.0.1:${PORT}" >/dev/null 2>&1 || true ) &
 
-exec python3 ember/server.py
+exec python3 xdrive/server.py

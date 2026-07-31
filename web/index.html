@@ -3,115 +3,185 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ember — Offline AI Assistant</title>
+  <title>xDrive — Offline AI Terminal</title>
   <link rel="stylesheet" href="/style.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='42' fill='%23E8804C'/></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect x='10' y='10' width='80' height='80' fill='none' stroke='%23E8804C' stroke-width='8'/><text x='50' y='68' font-size='52' font-family='monospace' fill='%23E8804C' text-anchor='middle'>x</text></svg>">
 </head>
 <body>
-  <div class="app">
+  <div class="frame">
 
-    <!-- ───────── Sidebar ───────── -->
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-head">
-        <div class="logo">
-          <span class="logo-mark"></span>
-          <span class="logo-name">Ember</span>
-        </div>
-        <button class="icon-btn" id="btn-collapse" title="Collapse sidebar">⟨</button>
+    <!-- ───────── Top bar ───────── -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">x</span>
+        <span class="brand-name">xDRIVE</span>
+        <span class="brand-sub">OFFLINE&nbsp;AI&nbsp;TERMINAL&nbsp;v1.0</span>
       </div>
-
-      <button class="new-chat" id="btn-new">
-        <span class="plus">+</span> New chat
-      </button>
-
-      <nav class="conv-list" id="conv-list"></nav>
-
-      <div class="sidebar-foot">
-        <div class="status-row">
-          <span class="status-dot" id="status-dot"></span>
-          <span class="status-text" id="status-text">checking…</span>
-        </div>
-        <div class="foot-btns">
-          <button class="icon-btn" id="btn-theme" title="Toggle light/dark">◐</button>
-          <button class="icon-btn" id="btn-settings" title="Settings">⚙</button>
-        </div>
+      <div class="top-status">
+        <span id="top-model" class="top-chip">NO MODEL</span>
+        <span id="top-net" class="top-chip net">LOCAL·ONLY</span>
       </div>
-    </aside>
+      <div class="clock" id="clock">00:00:00</div>
+    </header>
 
-    <!-- ───────── Main ───────── -->
-    <main class="main">
-      <header class="topbar">
-        <button class="icon-btn" id="btn-expand" title="Open sidebar" hidden>⟩</button>
-        <select id="model-select" class="model-select" title="Model"></select>
-        <label class="agent-toggle" title="Let the model read/write files and run commands in its workspace">
-          <input type="checkbox" id="agent-mode">
-          <span class="toggle-track"><span class="toggle-thumb"></span></span>
-          <span class="toggle-label">Agent mode</span>
-        </label>
-      </header>
+    <!-- ───────── Grid ───────── -->
+    <div class="grid">
 
-      <section class="chat" id="chat">
-        <div class="welcome" id="welcome">
-          <div class="welcome-mark"></div>
-          <h1>Ember</h1>
-          <p class="tagline">Your offline AI assistant — for code and everything else.</p>
-          <div class="suggestions">
-            <button class="chip" data-fill="Write a Python script that renames all files in a folder to lowercase.">Write a script</button>
-            <button class="chip" data-fill="Explain how async/await works in JavaScript with a short example.">Explain a concept</button>
-            <button class="chip" data-fill="Review this code for bugs:\n\n">Review my code</button>
-            <button class="chip" data-fill="Help me plan a small project: ">Plan a project</button>
+      <!-- Left column -->
+      <aside class="col col-left">
+        <section class="panel">
+          <div class="panel-head">SYSTEM</div>
+          <div class="panel-body sys">
+            <div class="kv"><span>DATE</span><b id="sys-date">—</b></div>
+            <div class="kv"><span>UPTIME</span><b id="sys-uptime">00:00</b></div>
+            <div class="kv"><span>RUNTIME</span><b id="sys-backend">SCANNING…</b></div>
+            <div class="kv"><span>MODELS</span><b id="sys-models">0</b></div>
+            <div class="kv"><span>LINK</span><b><span class="status-dot" id="status-dot"></span><span id="status-text">PROBING</span></b></div>
           </div>
-          <p class="offline-note" id="offline-note" hidden>
-            No local model runtime detected. Start <strong>Ollama</strong> or
-            <strong>llama-server</strong>, then click the status dot to retry.
-          </p>
-        </div>
-        <div class="messages" id="messages"></div>
-      </section>
+        </section>
 
-      <footer class="composer-wrap">
-        <div class="composer">
-          <textarea id="input" rows="1" placeholder="Message Ember…"></textarea>
-          <button id="btn-send" class="send-btn" title="Send">
-            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M3.4 20.4 22 12 3.4 3.6 3.4 10l13 2-13 2z"/></svg>
-          </button>
+        <section class="panel">
+          <div class="panel-head">MODEL</div>
+          <div class="panel-body">
+            <select id="model-select" class="model-select"></select>
+            <label class="agent-toggle" title="Grant file + command access inside the sandboxed workspace">
+              <input type="checkbox" id="agent-mode">
+              <span class="toggle-box"></span>
+              <span class="toggle-label">AGENT MODE</span>
+            </label>
+          </div>
+        </section>
+
+        <section class="panel panel-grow">
+          <div class="panel-head">SESSIONS
+            <button class="head-btn" id="btn-new" title="New session">+ NEW</button>
+          </div>
+          <nav class="conv-list" id="conv-list"></nav>
+        </section>
+
+        <section class="panel">
+          <div class="panel-body foot-btns">
+            <button class="term-btn" id="btn-theme" title="Invert display">INVERT</button>
+            <button class="term-btn" id="btn-settings" title="Configuration">CONFIG</button>
+          </div>
+        </section>
+      </aside>
+
+      <!-- Center terminal -->
+      <main class="col col-main panel">
+        <div class="panel-head tabs">
+          <span class="tab active">MAIN</span>
+          <span class="tab ghost">AI&nbsp;TERMINAL</span>
+          <span class="tab-fill"></span>
+          <span id="stream-state" class="tab ghost">IDLE</span>
         </div>
-        <div class="composer-hint">Runs 100% locally · Enter to send · Shift+Enter for a new line</div>
-      </footer>
-    </main>
+
+        <section class="chat" id="chat">
+          <div class="welcome" id="welcome">
+<pre class="ascii">
+██╗  ██╗██████╗ ██████╗ ██╗██╗   ██╗███████╗
+╚██╗██╔╝██╔══██╗██╔══██╗██║██║   ██║██╔════╝
+ ╚███╔╝ ██║  ██║██████╔╝██║██║   ██║█████╗
+ ██╔██╗ ██║  ██║██╔══██╗██║╚██╗ ██╔╝██╔══╝
+██╔╝╚██╗██████╔╝██║  ██║██║ ╚████╔╝ ███████╗
+╚═╝  ╚═╝╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝  ╚══════╝
+</pre>
+            <div class="boot" id="boot-lines">
+              <div>&gt; xDrive offline AI terminal</div>
+              <div>&gt; all inference local · nothing leaves this machine</div>
+              <div id="boot-runtime">&gt; scanning for LLM runtime…</div>
+            </div>
+            <div class="suggestions">
+              <button class="chip" data-fill="Write a Python script that renames all files in a folder to lowercase.">$ write_script</button>
+              <button class="chip" data-fill="Explain how async/await works in JavaScript with a short example.">$ explain</button>
+              <button class="chip" data-fill="Review this code for bugs:\n\n">$ review_code</button>
+              <button class="chip" data-fill="Help me plan a small project: ">$ plan_project</button>
+            </div>
+            <p class="offline-note" id="offline-note" hidden>
+              ! NO LLM RUNTIME DETECTED — start <strong>ollama</strong> or
+              <strong>llama-server</strong>, then click LINK in the SYSTEM panel to rescan.
+            </p>
+          </div>
+          <div class="messages" id="messages"></div>
+        </section>
+
+        <footer class="composer">
+          <span class="prompt-sign" id="prompt-sign">❯</span>
+          <textarea id="input" rows="1" spellcheck="false" placeholder="enter query…"></textarea>
+          <button id="btn-send" class="send-btn" title="Send [Enter]">EXEC</button>
+        </footer>
+      </main>
+
+      <!-- Right column -->
+      <aside class="col col-right">
+        <section class="panel">
+          <div class="panel-head">NETWORK</div>
+          <div class="panel-body net-body">
+            <div class="net-ring" id="net-ring"><span id="net-state">OFFLINE</span></div>
+            <div class="kv"><span>BIND</span><b>127.0.0.1</b></div>
+            <div class="kv"><span>EXPOSED</span><b>NOTHING</b></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">WORKSPACE</div>
+          <div class="panel-body">
+            <code id="ws-path" class="ws-path">—</code>
+            <div class="kv"><span>TOOLS</span><b>read · write · ls · exec</b></div>
+            <div class="kv"><span>SCOPE</span><b>SANDBOXED</b></div>
+          </div>
+        </section>
+
+        <section class="panel panel-grow">
+          <div class="panel-head">ACTIVITY</div>
+          <div class="panel-body activity" id="activity">
+            <div class="act-line dim">· log initialized</div>
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    <!-- ───────── Bottom status bar ───────── -->
+    <footer class="statusbar">
+      <span>LOCAL EXECUTION</span>
+      <span id="bar-model">—</span>
+      <span>ENTER=SEND · SHIFT+ENTER=NEWLINE</span>
+      <span class="bar-fill"></span>
+      <span id="bar-port">127.0.0.1:8484</span>
+    </footer>
   </div>
 
-  <!-- ───────── Settings modal ───────── -->
+  <!-- ───────── Config modal ───────── -->
   <div class="modal-backdrop" id="settings-modal" hidden>
     <div class="modal">
       <div class="modal-head">
-        <h2>Settings</h2>
-        <button class="icon-btn" id="btn-close-settings">✕</button>
+        <span class="panel-head-text">// CONFIG</span>
+        <button class="term-btn" id="btn-close-settings">✕</button>
       </div>
       <div class="modal-body">
         <label class="field">
-          <span>Backend URL <small>("auto" probes Ollama, then llama.cpp)</small></span>
+          <span>BACKEND URL <small>("auto" probes ollama → llama.cpp)</small></span>
           <input type="text" id="set-backend" placeholder="auto">
         </label>
         <label class="field">
-          <span>Default model</span>
+          <span>DEFAULT MODEL</span>
           <input type="text" id="set-model" placeholder="e.g. qwen2.5-coder:14b">
         </label>
         <label class="field">
-          <span>Temperature</span>
+          <span>TEMPERATURE</span>
           <input type="number" id="set-temp" min="0" max="2" step="0.1">
         </label>
         <label class="field">
-          <span>System prompt</span>
+          <span>SYSTEM PROMPT</span>
           <textarea id="set-system" rows="4"></textarea>
         </label>
         <div class="field">
-          <span>Agent workspace</span>
-          <code id="set-workspace" class="workspace-path"></code>
+          <span>AGENT WORKSPACE</span>
+          <code id="set-workspace" class="ws-path"></code>
         </div>
       </div>
       <div class="modal-foot">
-        <button class="btn-primary" id="btn-save-settings">Save</button>
+        <button class="btn-primary" id="btn-save-settings">WRITE CONFIG</button>
       </div>
     </div>
   </div>
