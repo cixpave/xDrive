@@ -2,6 +2,8 @@
 config.json
 data/
 models/
+library/
+tools/
 docs-offline/
 mirrors/
 __pycache__/

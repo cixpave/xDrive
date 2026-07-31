@@ -49,6 +49,11 @@
               <span class="toggle-box"></span>
               <span class="toggle-label">AGENT MODE</span>
             </label>
+            <label class="agent-toggle" title="Let the model search the offline knowledge base (Wikipedia, dev docs) and cite it">
+              <input type="checkbox" id="research-mode">
+              <span class="toggle-box"></span>
+              <span class="toggle-label">RESEARCH</span>
+            </label>
           </div>
         </section>
 
@@ -90,6 +95,7 @@
               <div>&gt; xDrive offline AI terminal</div>
               <div>&gt; all inference local · nothing leaves this machine</div>
               <div id="boot-runtime">&gt; scanning for LLM runtime…</div>
+              <div id="boot-knowledge">&gt; probing knowledge base…</div>
             </div>
             <div class="suggestions">
               <button class="chip" data-fill="Write a Python script that renames all files in a folder to lowercase.">$ write_script</button>
@@ -129,6 +135,16 @@
             <code id="ws-path" class="ws-path">—</code>
             <div class="kv"><span>TOOLS</span><b>read · write · ls · exec</b></div>
             <div class="kv"><span>SCOPE</span><b>SANDBOXED</b></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">KNOWLEDGE</div>
+          <div class="panel-body">
+            <div class="kv"><span>BASE</span><b id="kx-state">PROBING…</b></div>
+            <div class="kv"><span>BOOKS</span><b id="kx-books" title="">0</b></div>
+            <input id="kx-query" class="kx-input" placeholder="search offline wiki…" spellcheck="false">
+            <div id="kx-results" class="kx-results"></div>
           </div>
         </section>
 

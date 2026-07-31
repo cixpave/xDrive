@@ -10,7 +10,15 @@ echo "Drive location: $DRIVE_DIR"
 
 sudo pacman -S --needed --noconfirm python ollama
 
-mkdir -p "$DRIVE_DIR/models/ollama"
+# kiwix-serve hosts the offline knowledge base (Wikipedia, dev docs).
+if ! sudo pacman -S --needed --noconfirm kiwix-tools 2>/dev/null; then
+    echo "kiwix-tools not in repos — fetching static binary to tools/kiwix/"
+    mkdir -p "$DRIVE_DIR/tools/kiwix"
+    curl -L "https://download.kiwix.org/release/kiwix-tools/kiwix-tools_linux-x86_64.tar.gz" |
+        tar -xz --strip-components=1 -C "$DRIVE_DIR/tools/kiwix"
+fi
+
+mkdir -p "$DRIVE_DIR/models/ollama" "$DRIVE_DIR/library"
 
 # Make the model store on this drive the default for your user.
 PROFILE="$HOME/.config/environment.d/xdrive.conf"
@@ -28,8 +36,8 @@ if systemctl list-unit-files ollama.service >/dev/null 2>&1; then
 fi
 
 echo
-echo "Done. Next steps:"
-echo "  1. Download models while you still have internet:"
-echo "       ./scripts/pull-models.sh"
-echo "  2. Launch xDrive any time (works offline):"
+echo "Done. Next steps (while you still have internet):"
+echo "  1. Download models:               ./scripts/pull-models.sh"
+echo "  2. Download Wikipedia + dev docs: ./scripts/pull-knowledge.sh"
+echo "  3. Launch xDrive any time (works offline):"
 echo "       ./start.sh"

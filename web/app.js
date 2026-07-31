@@ -13,6 +13,7 @@ const els = {
   convList: $("conv-list"),
   modelSelect: $("model-select"),
   agentMode: $("agent-mode"),
+  researchMode: $("research-mode"),
   statusDot: $("status-dot"),
   statusText: $("status-text"),
   streamState: $("stream-state"),
@@ -99,6 +100,44 @@ function renderMarkdown(text) {
   return tpl.content;
 }
 
+/* ───────── reasoning (<think>) blocks ───────── */
+
+function splitThink(text) {
+  const parts = [];
+  const re = /<think>([\s\S]*?)(<\/think>|$)/g;
+  let last = 0, m;
+  while ((m = re.exec(text))) {
+    if (m.index > last) parts.push({ think: false, content: text.slice(last, m.index) });
+    parts.push({ think: true, content: m[1], live: m[2] === "" });
+    last = re.lastIndex;
+  }
+  if (last < text.length) parts.push({ think: false, content: text.slice(last) });
+  return parts;
+}
+
+/* Render assistant text: markdown + collapsible REASONING cards. */
+function renderAssistant(text) {
+  const frag = document.createDocumentFragment();
+  for (const part of splitThink(text ?? "")) {
+    if (part.think) {
+      if (!part.content.trim() && !part.live) continue;
+      const card = document.createElement("details");
+      card.className = "think-card";
+      if (part.live) card.open = true;
+      const summary = document.createElement("summary");
+      summary.textContent = part.live ? "REASONING ▓" : "REASONING";
+      const body = document.createElement("div");
+      body.className = "think-body";
+      body.append(renderMarkdown(part.content));
+      card.append(summary, body);
+      frag.append(card);
+    } else if (part.content.trim()) {
+      frag.append(renderMarkdown(part.content));
+    }
+  }
+  return frag;
+}
+
 /* ───────── message DOM ───────── */
 
 function addUserMessage(text) {
@@ -179,6 +218,15 @@ async function refreshStatus() {
     $("boot-runtime").textContent = s.online
       ? `> runtime online: ${s.backend_kind} · ${s.models.length} model(s) loaded`
       : "> no LLM runtime found — start ollama or llama-server";
+    const books = s.kiwix_books || [];
+    $("kx-state").textContent = s.kiwix_online ? "ONLINE" : "OFFLINE";
+    $("kx-state").style.color = s.kiwix_online ? "var(--accent)" : "";
+    $("kx-books").textContent = books.length;
+    $("kx-books").title = books.join("\n");
+    $("boot-knowledge").textContent = s.kiwix_online
+      ? `> knowledge base mounted: ${books.length} book(s) — wikipedia & docs on-drive`
+      : "> knowledge base not running — run scripts/pull-knowledge to add wikipedia & docs";
+    state.kiwixViewer = s.kiwix_url;
     els.offlineNote.hidden = s.online;
     $("ws-path").textContent = s.workspace || "—";
     $("set-workspace").textContent = s.workspace || "";
@@ -254,7 +302,7 @@ async function openConversation(id) {
       currentShell = null;
     } else if (m.role === "assistant") {
       if (!currentShell) currentShell = addAssistantShell();
-      currentShell.querySelector(".content").append(renderMarkdown(m.content));
+      currentShell.querySelector(".content").append(renderAssistant(m.content));
     } else if (m.role === "tool") {
       if (!currentShell) currentShell = addAssistantShell();
       const idx = m.content.indexOf(" -> ");
@@ -300,7 +348,7 @@ async function sendMessage() {
   const renderLive = (final = false) => {
     const stick = nearBottom();
     liveBlock.innerHTML = "";
-    liveBlock.append(renderMarkdown(streamedText));
+    liveBlock.append(renderAssistant(streamedText));
     if (!final) {
       const cur = document.createElement("span");
       cur.className = "cursor-blink";
@@ -312,7 +360,9 @@ async function sendMessage() {
   state.streaming = true;
   setSendButton(true);
   setStreamState(true);
-  logActivity(`query sent (${els.agentMode.checked ? "agent" : "chat"})`);
+  const mode = els.agentMode.checked ? "agent"
+    : els.researchMode.checked ? "research" : "chat";
+  logActivity(`query sent (${mode})`);
   const controller = new AbortController();
   state.abort = controller;
 
@@ -332,6 +382,7 @@ async function sendMessage() {
         message: text,
         model: els.modelSelect.value || undefined,
         agent_mode: els.agentMode.checked,
+        research_mode: els.researchMode.checked,
       }),
     });
 
@@ -463,6 +514,41 @@ els.modelSelect.addEventListener("change", () => {
 });
 els.agentMode.addEventListener("change", () => {
   logActivity(`agent mode ${els.agentMode.checked ? "ENABLED" : "disabled"}`);
+});
+els.researchMode.addEventListener("change", () => {
+  logActivity(`research mode ${els.researchMode.checked ? "ENABLED" : "disabled"}`);
+});
+
+/* ───────── knowledge search ───────── */
+
+$("kx-query").addEventListener("keydown", async (e) => {
+  if (e.key !== "Enter") return;
+  const q = $("kx-query").value.trim();
+  if (!q) return;
+  const box = $("kx-results");
+  box.innerHTML = "<div class='kx-hit dim'>searching…</div>";
+  try {
+    const res = await fetch(`/api/knowledge/search?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    box.innerHTML = "";
+    if (!res.ok || !(data.results || []).length) {
+      box.innerHTML = "<div class='kx-hit dim'>no results</div>";
+      return;
+    }
+    for (const r of data.results.slice(0, 6)) {
+      const a = document.createElement("a");
+      a.className = "kx-hit";
+      a.textContent = r.title || r.path;
+      a.title = r.snippet || r.path;
+      a.href = `${data.viewer}/viewer#${r.path}`;
+      a.target = "_blank";
+      a.rel = "noopener";
+      box.append(a);
+    }
+    logActivity(`knowledge search: ${q}`, true);
+  } catch (_) {
+    box.innerHTML = "<div class='kx-hit dim'>knowledge base offline</div>";
+  }
 });
 
 $("btn-new").addEventListener("click", newChat);

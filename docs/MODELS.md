@@ -7,22 +7,23 @@ All model weights live on this drive in `models/ollama/` (the setup scripts
 point `OLLAMA_MODELS` there), so the whole thing — app, models,
 conversations, workspace — travels with the drive.
 
-## Core set (~90 GB) — pulled by `scripts/pull-models.sh` / `.ps1`
+## Core set (~112 GB) — pulled by `scripts/pull-models.sh` / `.ps1`
 
 | Model | Size | Use it for |
 |---|---|---|
-| `qwen2.5-coder:14b` | ~9 GB | Everyday coding: writing, debugging, refactoring |
+| `qwen2.5-coder:14b` | ~9 GB | Everyday coding (40+ languages): writing, debugging, refactoring |
 | `qwen2.5:14b` | ~9 GB | Everyday general chat, writing, Q&A |
+| `deepseek-r1:14b` | ~9 GB | Step-by-step reasoning: math, logic, planning |
 | `qwen2.5-coder:32b` | ~20 GB | Hard coding problems (needs ~24 GB RAM/VRAM) |
-| `llama3.3:70b` | ~43 GB | Best general reasoning (needs ~48 GB RAM, or 64 GB system RAM on CPU) |
+| `deepseek-r1:32b` | ~20 GB | Heavy reasoning (needs ~24 GB RAM/VRAM) |
+| `llama3.3:70b` | ~43 GB | Best general model (needs ~48 GB RAM, or 64 GB system RAM on CPU) |
 | `qwen2.5:3b` | ~2 GB | Instant answers on weak hardware / battery |
 
 ## Worth adding if you have the RAM (~250 GB more)
 
 | Model | Size | Notes |
 |---|---|---|
-| `deepseek-r1:32b` | ~20 GB | Strong step-by-step reasoning (math, logic, planning) |
-| `deepseek-r1:70b` | ~43 GB | Heavier reasoning variant |
+| `deepseek-r1:70b` | ~43 GB | Heaviest reasoning variant |
 | `qwen2.5-coder:7b` | ~5 GB | Fast autocomplete-grade coding |
 | `llava:13b` | ~8 GB | Vision — describe screenshots and images |
 | `mixtral:8x22b` | ~80 GB | Large mixture-of-experts generalist |
@@ -36,9 +37,10 @@ you'd otherwise google:
 - **Full-precision GGUFs** — pull `q8_0` or `fp16` variants of your favorite
   models for maximum quality (`ollama pull qwen2.5-coder:32b-instruct-q8_0`).
   A 70B fp16 is ~140 GB.
-- **Offline docs** — [Kiwix](https://kiwix.org) ZIM files: all of Wikipedia
-  (~100 GB), Stack Overflow (~75 GB), DevDocs, Arch Wiki. Put them in
-  `docs-offline/`.
+- **Offline docs** — `scripts/pull-knowledge.*` already fills `library/`
+  with Wikipedia, the Arch Wiki, and DevDocs; add Stack Overflow (~75 GB),
+  Wiktionary, and Wikibooks with the `--full` flag, or drop any other
+  [Kiwix](https://kiwix.org) ZIM into `library/` and restart.
 - **Package mirrors** — a pacman mirror snapshot and a Python wheelhouse
   (`pip download`) so you can install software offline.
 - **Your code and data** — the agent workspace (`data/workspace/`) and any
@@ -51,7 +53,7 @@ xDrive/
 ├── xdrive/          the app
 ├── web/             the UI
 ├── models/ollama/   model weights            (~0.3–2 TB)
-├── docs-offline/    Kiwix ZIMs, DevDocs      (~0.3 TB)
+├── library/         Kiwix ZIMs: Wikipedia, Stack Overflow, DevDocs (~0.3 TB)
 ├── mirrors/         pacman / pip mirrors     (~0.5 TB)
 └── data/            conversations + agent workspace
 ```

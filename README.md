@@ -17,6 +17,12 @@ feed around a central AI terminal.
 - **Agent mode for coding** — the model can list, read, and write files and
   run commands inside a sandboxed workspace on the drive, so it can actually
   build and test things, not just talk about them.
+- **Built-in knowledge base** — all of English Wikipedia, the Arch Wiki, and
+  documentation for ~17 programming languages/tools live on the drive as ZIM
+  files. The AI can search and read them (RESEARCH mode), and you can search
+  them yourself from the KNOWLEDGE panel.
+- **Reasoning models** — DeepSeek-R1 ships in the core set; its chain of
+  thought renders as collapsible REASONING blocks in the terminal.
 - **Everything on the drive** — model weights, conversations, settings, and
   the agent workspace all live alongside the app, so the whole assistant
   travels with your 5TB drive.
@@ -27,16 +33,18 @@ feed around a central AI terminal.
 ### Arch Linux
 
 ```bash
-./scripts/setup-arch.sh    # one-time: installs python + ollama (needs internet)
-./scripts/pull-models.sh   # one-time: downloads the core model set (~90 GB)
-./start.sh                 # every time after: fully offline
+./scripts/setup-arch.sh       # one-time: installs python + ollama + kiwix (needs internet)
+./scripts/pull-models.sh      # one-time: downloads the core model set (~112 GB)
+./scripts/pull-knowledge.sh   # one-time: downloads Wikipedia + code docs (~103 GB)
+./start.sh                    # every time after: fully offline
 ```
 
 ### Windows
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1   # one-time
-powershell -ExecutionPolicy Bypass -File scripts\pull-models.ps1     # one-time
+powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1     # one-time
+powershell -ExecutionPolicy Bypass -File scripts\pull-models.ps1       # one-time
+powershell -ExecutionPolicy Bypass -File scripts\pull-knowledge.ps1    # one-time
 ```
 
 then just double-click **`start.bat`**.
@@ -76,10 +84,39 @@ watch it write the files and run them. Tool executions show up as expandable
 `EXEC` cards in the terminal and in the ACTIVITY feed. Only enable it when
 you want it — `run_command` executes real commands on your machine.
 
+## Knowledge base (offline Wikipedia + code docs)
+
+`scripts/pull-knowledge.*` fills `library/` with ZIM archives served locally
+by [kiwix-serve](https://kiwix.org) (installed by the setup script, started
+automatically by the launchers):
+
+- **All of English Wikipedia** with images (~102 GB)
+- **Arch Wiki**
+- **DevDocs** for Python, JavaScript, TypeScript, Node, HTML, CSS, C, C++,
+  Rust, Go, Java, Bash, Git, Docker, PostgreSQL, React, Rails
+- `--full` / `-Full` adds **all of Stack Overflow** (~75 GB), Wiktionary,
+  and Wikibooks
+
+Two ways to use it, both fully offline:
+
+1. **RESEARCH toggle** — the model gets `search_knowledge` and
+   `read_knowledge` tools, looks up articles mid-answer, and cites them.
+   (AGENT MODE includes these tools too.)
+2. **KNOWLEDGE panel** — type a query in the right-hand panel to search the
+   library yourself; results open in the Kiwix reader.
+
+## Reasoning
+
+The core model set includes **DeepSeek-R1** (14B and 32B). When a reasoning
+model thinks before answering, xDrive shows the chain of thought as a
+collapsed `REASONING` block — open it to watch the model work. Reasoning
+text is kept out of the context sent back to the model on later turns, so
+long sessions stay fast.
+
 ## Models
 
 `scripts/pull-models.*` grabs a balanced core set (coding + general +
-lightweight, ~90 GB). See **[docs/MODELS.md](docs/MODELS.md)** for the full
+lightweight + reasoning, ~112 GB). See **[docs/MODELS.md](docs/MODELS.md)** for the full
 5TB drive plan — bigger quants, reasoning and vision models, and offline
 documentation (Wikipedia, Stack Overflow) to pair with it.
 
@@ -97,6 +134,7 @@ changed from the CONFIG panel in the UI:
 | `data_dir` | `data` | where conversations + workspace live |
 | `max_tool_steps` | `8` | agent-mode iteration cap per message |
 | `command_timeout` | `120` | seconds before a command is killed |
+| `kiwix_url` | `auto` | knowledge base URL; `auto` probes kiwix-serve on 8181 |
 | `port` | `8484` | UI port (or set `XDRIVE_PORT`) |
 
 ## Project layout
@@ -110,4 +148,6 @@ start.sh          launcher (Linux)
 start.bat         launcher (Windows)
 data/             created at runtime: conversations + agent workspace
 models/           created by setup: model weights (kept on the drive)
+library/          created by setup: Wikipedia + docs ZIM files
+tools/            kiwix-serve binary if not installed system-wide
 ```

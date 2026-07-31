@@ -1,6 +1,6 @@
 @echo off
 rem xDrive launcher — Windows
-setlocal
+setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 if not defined XDRIVE_PORT set XDRIVE_PORT=8484
@@ -31,6 +31,19 @@ if %errorlevel%==0 (
         echo Starting Ollama...
         start "" /min ollama serve
         timeout /t 3 /nobreak >nul
+    )
+)
+
+rem Serve the offline knowledge base (Wikipedia, dev docs) if present.
+if exist "tools\kiwix\kiwix-serve.exe" (
+    if exist "library\*.zim" (
+        curl -sf -m 2 http://127.0.0.1:8181/catalog/v2/entries >nul 2>nul
+        if errorlevel 1 (
+            set ZIMS=
+            for %%f in (library\*.zim) do set ZIMS=!ZIMS! "%%f"
+            echo Starting knowledge base...
+            start "" /min tools\kiwix\kiwix-serve.exe --port 8181 !ZIMS!
+        )
     )
 )
 

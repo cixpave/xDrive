@@ -1,5 +1,5 @@
 # Download a recommended model lineup to this drive (requires internet ONCE).
-# ~90 GB for the core set; see docs/MODELS.md for the full 5TB plan.
+# ~112 GB for the core set; see docs/MODELS.md for the full 5TB plan.
 $ErrorActionPreference = "Stop"
 $DriveDir = Split-Path -Parent $PSScriptRoot
 Set-Location $DriveDir
@@ -21,10 +21,12 @@ try {
 }
 
 $CoreModels = @(
-    "qwen2.5-coder:14b",   # daily-driver coding model (~9 GB)
+    "qwen2.5-coder:14b",   # daily-driver coding model, 40+ languages (~9 GB)
     "qwen2.5:14b",         # daily-driver general model (~9 GB)
+    "deepseek-r1:14b",     # step-by-step reasoning model (~9 GB)
     "qwen2.5-coder:32b",   # heavy coding model (~20 GB)
-    "llama3.3:70b",        # heavy general/reasoning model (~43 GB)
+    "deepseek-r1:32b",     # heavy reasoning model (~20 GB)
+    "llama3.3:70b",        # heavy general model (~43 GB)
     "qwen2.5:3b"           # fast lightweight fallback (~2 GB)
 )
 
