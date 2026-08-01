@@ -203,6 +203,8 @@ then double-click **`start.bat`**.
 | Port 8484 already in use | `XDRIVE_PORT=9090 ./start.sh` |
 | Launcher entry missing after moving the drive | `./scripts/install-desktop.sh` (it stores the absolute path) |
 | APPLY UPDATE fails | local changes on the drive: `git stash && git pull --ff-only origin main` inside the repo |
+| Updated (git pull / APPLY UPDATE) but nothing changed | the old server process is still running — hit **RESTART** (bottom-left, or offered in GET MORE), or `pkill -f xdrive/server.py` and relaunch |
+| Downloaded knowledge doesn't show in KNOWLEDGE panel | new ZIMs auto-mount after download; if BOOKS stays 0, hit **RESTART** |
 
 ## Project layout
 

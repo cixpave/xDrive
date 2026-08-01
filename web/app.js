@@ -689,10 +689,20 @@ async function checkUpdates() {
   $("upd-status").className = "upd-status";
   $("upd-status").textContent = "contacting github…";
   $("btn-apply-upd").hidden = true;
+  $("btn-restart-upd").hidden = true;
   try {
     const res = await fetch("/api/updates/check");
     const u = await res.json();
     $("upd-current").textContent = `local: ${u.current || "unknown"}`;
+    if (u.restart_needed) {
+      $("upd-status").className = "upd-status good";
+      $("upd-status").textContent =
+        `an update is on disk (${u.current}) but the server is still running ` +
+        `${u.running} — restart to load it`;
+      $("btn-restart-upd").hidden = false;
+      logActivity("restart needed to load update");
+      return;
+    }
     if (!u.online) {
       $("upd-status").textContent = `offline — ${u.error || "no connection to GitHub"}`;
       logActivity("update check failed: offline", true);
@@ -719,10 +729,27 @@ async function applyUpdate() {
   const r = await res.json();
   $("upd-status").className = "upd-status" + (r.ok ? " good" : "");
   $("upd-status").textContent = r.ok
-    ? `${r.output}\n\n${r.note}`
+    ? `${r.output}\n\nrestart to load the new version →`
     : `update failed:\n${r.output}`;
   $("btn-apply-upd").hidden = true;
-  logActivity(r.ok ? "update applied — restart xdrive" : "update failed", !r.ok);
+  $("btn-restart-upd").hidden = !r.ok;
+  logActivity(r.ok ? "update applied — restart to load it" : "update failed", !r.ok);
+}
+
+async function restartServer() {
+  logActivity("restarting server…");
+  try {
+    await fetch("/api/restart", { method: "POST" });
+  } catch (_) { /* connection drops as the process re-execs */ }
+  const deadline = Date.now() + 20000;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 700));
+    try {
+      const res = await fetch("/api/status");
+      if (res.ok) { location.reload(); return; }
+    } catch (_) { /* still restarting */ }
+  }
+  logActivity("server did not come back — relaunch xDrive manually", true);
 }
 
 /* ───────── theme ───────── */
@@ -799,6 +826,10 @@ $("tab-chat").addEventListener("click", () => switchView("chat"));
 $("tab-store").addEventListener("click", () => switchView("store"));
 $("btn-check-upd").addEventListener("click", checkUpdates);
 $("btn-apply-upd").addEventListener("click", applyUpdate);
+$("btn-restart-upd").addEventListener("click", restartServer);
+$("btn-restart").addEventListener("click", () => {
+  if (confirm("Restart the xDrive server? Active streams will stop.")) restartServer();
+});
 
 $("btn-new").addEventListener("click", () => { switchView("chat"); newChat(); });
 $("btn-theme").addEventListener("click", () => {
