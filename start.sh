@@ -1,9 +1,18 @@
 #!/usr/bin/env bash
 # xDrive launcher — Linux (Arch and friends)
+#
+#   ./start.sh          run the server in this terminal + open a browser tab
+#   ./start.sh --app    desktop-app mode: server in the background, xDrive
+#                       opens in its own window (used by the launcher entry)
 set -euo pipefail
 cd "$(dirname "$0")"
 
 PORT="${XDRIVE_PORT:-8484}"
+URL="http://127.0.0.1:${PORT}"
+APP_MODE=0
+if [ "${1:-}" = "--app" ]; then
+    APP_MODE=1
+fi
 
 if ! command -v python3 >/dev/null 2>&1; then
     echo "Error: python3 not found. Install it with:  sudo pacman -S python"
@@ -38,7 +47,41 @@ if [ -n "$KIWIX_BIN" ] && ls library/*.zim >/dev/null 2>&1; then
     fi
 fi
 
-# Open the UI in the default browser once the server is up.
-( sleep 1.5; xdg-open "http://127.0.0.1:${PORT}" >/dev/null 2>&1 || true ) &
+server_up() {
+    curl -sf -m 2 "$URL/api/status" >/dev/null 2>&1
+}
+
+# Open xDrive in its own window (chromium app mode), falling back to a tab.
+open_app_window() {
+    local browser
+    for browser in chromium chromium-browser google-chrome-stable \
+                   google-chrome brave brave-browser vivaldi-stable \
+                   microsoft-edge-stable; do
+        if command -v "$browser" >/dev/null 2>&1; then
+            nohup "$browser" --app="$URL" >/dev/null 2>&1 &
+            return 0
+        fi
+    done
+    if command -v firefox >/dev/null 2>&1; then
+        nohup firefox --new-window "$URL" >/dev/null 2>&1 &
+        return 0
+    fi
+    xdg-open "$URL" >/dev/null 2>&1 || echo "Open $URL in your browser."
+}
+
+if [ "$APP_MODE" = "1" ]; then
+    if ! server_up; then
+        nohup python3 xdrive/server.py >/dev/null 2>&1 &
+        for _ in $(seq 1 40); do
+            server_up && break
+            sleep 0.25
+        done
+    fi
+    open_app_window
+    exit 0
+fi
+
+# Terminal mode: open the UI in the default browser once the server is up.
+( sleep 1.5; xdg-open "$URL" >/dev/null 2>&1 || true ) &
 
 exec python3 xdrive/server.py

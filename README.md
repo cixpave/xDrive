@@ -51,6 +51,23 @@ then just double-click **`start.bat`**.
 
 The UI opens at [http://127.0.0.1:8484](http://127.0.0.1:8484).
 
+## Desktop app (Arch / Linux)
+
+`setup-arch.sh` registers xDrive in your application launcher automatically.
+To (re)install the entry by hand:
+
+```bash
+./scripts/install-desktop.sh            # add/update launcher entry + icon
+./scripts/install-desktop.sh --remove   # uninstall
+```
+
+After that, **xDrive** shows up in GNOME/KDE/rofi/wofi like any other app,
+with its own terminal-style icon. Launching it starts the server, Ollama,
+and the knowledge base in the background, then opens xDrive in its own
+window (Chromium app mode when available, otherwise your default browser).
+The entry stores the drive's absolute path — if you mount the drive at a
+different location, re-run the install script once.
+
 ## How it works
 
 ```
@@ -144,7 +161,8 @@ xdrive/server.py  the entire backend (single file, stdlib only)
 web/              the terminal UI (index.html, style.css, app.js, bundled libs)
 scripts/          one-time setup + model download for Arch and Windows
 docs/MODELS.md    model recommendations for a 5TB drive
-start.sh          launcher (Linux)
+start.sh          launcher (Linux; --app for desktop-app mode)
+assets/           app icon (SVG)
 start.bat         launcher (Windows)
 data/             created at runtime: conversations + agent workspace
 models/           created by setup: model weights (kept on the drive)
