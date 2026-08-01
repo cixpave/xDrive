@@ -291,6 +291,7 @@ async function refreshConversations() {
 async function openConversation(id) {
   const res = await fetch(`/api/conversations/${id}`);
   if (!res.ok) return;
+  switchView("chat");
   const conv = await res.json();
   state.conversationId = conv.id;
   els.welcome.hidden = true;
@@ -481,6 +482,194 @@ async function saveSettings() {
   refreshStatus();
 }
 
+/* ───────── GET MORE (store + updates) ───────── */
+
+const store = { open: false, timer: null };
+
+function switchView(view) {
+  store.open = view === "store";
+  $("chat").hidden = store.open;
+  $("composer").hidden = store.open;
+  $("store").hidden = !store.open;
+  $("tab-chat").classList.toggle("active", !store.open);
+  $("tab-store").classList.toggle("active", store.open);
+  if (store.open) {
+    refreshStore();
+    if (!store.timer) store.timer = setInterval(refreshStore, 2000);
+  } else if (store.timer) {
+    clearInterval(store.timer);
+    store.timer = null;
+  }
+}
+
+function fmtBytes(n) {
+  if (!n) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+  return `${n.toFixed(n >= 100 ? 0 : 1)} ${units[i]}`;
+}
+
+function storeRow(kind, item, job) {
+  const row = document.createElement("div");
+  row.className = "store-row";
+
+  const name = document.createElement("span");
+  name.className = "item-name";
+  name.textContent = kind === "model" ? item.id : item.title;
+  row.append(name);
+
+  if (item.cat) {
+    const cat = document.createElement("span");
+    cat.className = "item-cat";
+    cat.textContent = item.cat.toUpperCase();
+    row.append(cat);
+  }
+
+  const desc = document.createElement("span");
+  desc.className = "item-desc";
+  desc.textContent = item.desc || "";
+  row.append(desc);
+
+  const size = document.createElement("span");
+  size.className = "item-size";
+  size.textContent = item.size;
+  row.append(size);
+
+  const state = document.createElement("span");
+  state.className = "item-state";
+
+  if (job && job.status === "running") {
+    const wrap = document.createElement("span");
+    wrap.className = "item-progress";
+    const bar = document.createElement("span");
+    bar.className = "pbar";
+    const fill = document.createElement("span");
+    fill.className = "pbar-fill";
+    const pct = job.total ? Math.min(100, (job.done / job.total) * 100) : 0;
+    fill.style.width = pct + "%";
+    bar.append(fill);
+    const label = document.createElement("span");
+    label.className = "pbar-label";
+    label.textContent = job.total
+      ? `${fmtBytes(job.done)} / ${fmtBytes(job.total)} — ${job.detail}`
+      : job.detail;
+    wrap.append(bar, label);
+    const cancel = document.createElement("button");
+    cancel.className = "btn-get btn-cancel";
+    cancel.textContent = "✕";
+    cancel.title = "Cancel";
+    cancel.addEventListener("click", () => cancelDownload(kind, item.id));
+    state.append(wrap, cancel);
+  } else if (item.installed || (job && job.status === "done")) {
+    const lbl = document.createElement("span");
+    lbl.className = "item-installed";
+    lbl.textContent = "INSTALLED";
+    state.append(lbl);
+  } else {
+    if (job && (job.status === "error" || job.status === "cancelled")) {
+      const label = document.createElement("span");
+      label.className = "pbar-label err";
+      label.textContent = job.detail;
+      label.title = job.detail;
+      state.append(label);
+    }
+    const btn = document.createElement("button");
+    btn.className = "btn-get";
+    btn.textContent = "GET";
+    btn.addEventListener("click", () => startDownload(kind, item.id));
+    state.append(btn);
+  }
+  row.append(state);
+  return row;
+}
+
+async function refreshStore() {
+  try {
+    const res = await fetch("/api/downloads");
+    const data = await res.json();
+    const anyRunning = Object.values(data.jobs || {})
+      .some((j) => j.status === "running");
+    const modelBox = $("store-models");
+    modelBox.innerHTML = "";
+    for (const m of data.models) {
+      modelBox.append(storeRow("model", m, data.jobs[`model:${m.id}`]));
+    }
+    const zimBox = $("store-zims");
+    zimBox.innerHTML = "";
+    for (const z of data.zims) {
+      zimBox.append(storeRow("zim", z, data.jobs[`zim:${z.id}`]));
+    }
+    // keep polling in the background while something is downloading
+    if (anyRunning && !store.timer) store.timer = setInterval(refreshStore, 2000);
+    if (!anyRunning && !store.open && store.timer) {
+      clearInterval(store.timer);
+      store.timer = null;
+    }
+  } catch (_) { /* server briefly unreachable */ }
+}
+
+async function startDownload(kind, id) {
+  const res = await fetch("/api/downloads/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind, id }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) logActivity(`download refused: ${data.error || res.status}`, true);
+  else logActivity(`download started: ${id}`);
+  refreshStore();
+}
+
+async function cancelDownload(kind, id) {
+  await fetch("/api/downloads/cancel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ job: `${kind}:${id}` }),
+  });
+  logActivity(`download cancelled: ${id}`, true);
+}
+
+async function checkUpdates() {
+  $("upd-status").className = "upd-status";
+  $("upd-status").textContent = "contacting github…";
+  $("btn-apply-upd").hidden = true;
+  try {
+    const res = await fetch("/api/updates/check");
+    const u = await res.json();
+    $("upd-current").textContent = `local: ${u.current || "unknown"}`;
+    if (!u.online) {
+      $("upd-status").textContent = `offline — ${u.error || "no connection to GitHub"}`;
+      logActivity("update check failed: offline", true);
+      return;
+    }
+    if (u.update_available) {
+      $("upd-status").className = "upd-status good";
+      $("upd-status").textContent =
+        `update available → ${u.latest} (${u.latest_date})\n"${u.latest_message}"`;
+      $("btn-apply-upd").hidden = false;
+      logActivity(`update available: ${u.latest}`);
+    } else {
+      $("upd-status").textContent = `up to date with main (${u.latest})`;
+      logActivity("xdrive is up to date", true);
+    }
+  } catch (_) {
+    $("upd-status").textContent = "update check failed";
+  }
+}
+
+async function applyUpdate() {
+  $("upd-status").textContent = "pulling from github…";
+  const res = await fetch("/api/updates/apply", { method: "POST" });
+  const r = await res.json();
+  $("upd-status").className = "upd-status" + (r.ok ? " good" : "");
+  $("upd-status").textContent = r.ok
+    ? `${r.output}\n\n${r.note}`
+    : `update failed:\n${r.output}`;
+  $("btn-apply-upd").hidden = true;
+  logActivity(r.ok ? "update applied — restart xdrive" : "update failed", !r.ok);
+}
+
 /* ───────── theme ───────── */
 
 function applyTheme(theme) {
@@ -551,7 +740,12 @@ $("kx-query").addEventListener("keydown", async (e) => {
   }
 });
 
-$("btn-new").addEventListener("click", newChat);
+$("tab-chat").addEventListener("click", () => switchView("chat"));
+$("tab-store").addEventListener("click", () => switchView("store"));
+$("btn-check-upd").addEventListener("click", checkUpdates);
+$("btn-apply-upd").addEventListener("click", applyUpdate);
+
+$("btn-new").addEventListener("click", () => { switchView("chat"); newChat(); });
 $("btn-theme").addEventListener("click", () => {
   applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
 });

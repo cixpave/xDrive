@@ -423,6 +423,162 @@ def kiwix_read(url, path, limit=20_000):
 
 
 # --------------------------------------------------------------------------
+# Downloads (models + knowledge ZIMs) and app updates from GitHub
+# --------------------------------------------------------------------------
+
+GITHUB_REPO = "cixpave/xDrive"
+GH_API = os.environ.get("XDRIVE_GH_API", "https://api.github.com")
+ZIM_BASE = os.environ.get("XDRIVE_ZIM_BASE", "https://download.kiwix.org/zim/")
+
+MODEL_CATALOG = [
+    {"id": "qwen2.5:3b",        "size": "1.9 GB", "cat": "general",   "desc": "instant answers on any hardware"},
+    {"id": "qwen2.5:14b",       "size": "9.0 GB", "cat": "general",   "desc": "everyday chat, writing, Q&A"},
+    {"id": "llama3.3:70b",      "size": "43 GB",  "cat": "general",   "desc": "best general model (48 GB+ RAM)"},
+    {"id": "qwen2.5-coder:7b",  "size": "4.7 GB", "cat": "coding",    "desc": "fast coding assistant"},
+    {"id": "qwen2.5-coder:14b", "size": "9.0 GB", "cat": "coding",    "desc": "daily-driver coding, 40+ languages"},
+    {"id": "qwen2.5-coder:32b", "size": "20 GB",  "cat": "coding",    "desc": "heavy coding (24 GB+ RAM)"},
+    {"id": "deepseek-r1:8b",    "size": "5.2 GB", "cat": "reasoning", "desc": "compact step-by-step reasoning"},
+    {"id": "deepseek-r1:14b",   "size": "9.0 GB", "cat": "reasoning", "desc": "step-by-step reasoning"},
+    {"id": "deepseek-r1:32b",   "size": "20 GB",  "cat": "reasoning", "desc": "heavy reasoning (24 GB+ RAM)"},
+    {"id": "llava:13b",         "size": "8.0 GB", "cat": "vision",    "desc": "describe screenshots and images"},
+]
+
+_DEVDOCS = ["python", "javascript", "typescript", "node", "html", "css", "c",
+            "cpp", "rust", "go", "java", "bash", "git", "docker",
+            "postgresql", "react", "rails"]
+
+ZIM_CATALOG = [
+    {"id": "wikipedia-full",   "title": "Wikipedia — full English, with images",
+     "size": "~102 GB", "files": ["wikipedia/wikipedia_en_all_maxi.zim"]},
+    {"id": "wikipedia-nopic",  "title": "Wikipedia — full English, text only",
+     "size": "~54 GB",  "files": ["wikipedia/wikipedia_en_all_nopic.zim"]},
+    {"id": "wikipedia-simple", "title": "Simple English Wikipedia",
+     "size": "~2 GB",   "files": ["wikipedia/wikipedia_en_simple_all_maxi.zim"]},
+    {"id": "archwiki",         "title": "Arch Wiki",
+     "size": "~30 MB",  "files": ["other/archlinux_en_all_maxi.zim"]},
+    {"id": "devdocs-pack",     "title": f"DevDocs pack — {len(_DEVDOCS)} languages/tools",
+     "size": "~1 GB",   "files": [f"devdocs/devdocs_en_{d}.zim" for d in _DEVDOCS]},
+    {"id": "stackoverflow",    "title": "Stack Overflow — every question & answer",
+     "size": "~75 GB",  "files": ["stack_exchange/stackoverflow.com_en_all.zim"]},
+    {"id": "wiktionary",       "title": "Wiktionary — English dictionary",
+     "size": "~7 GB",   "files": ["wiktionary/wiktionary_en_all_maxi.zim"]},
+    {"id": "wikibooks",        "title": "Wikibooks — textbooks & manuals",
+     "size": "~4 GB",   "files": ["wikibooks/wikibooks_en_all_maxi.zim"]},
+]
+
+_jobs_lock = threading.Lock()
+JOBS = {}  # job_id -> {status, detail, done, total, cancel}
+
+
+def job_update(job_id, **fields):
+    with _jobs_lock:
+        if job_id in JOBS:
+            JOBS[job_id].update(fields)
+
+
+def job_cancelled(job_id):
+    with _jobs_lock:
+        return JOBS.get(job_id, {}).get("cancel", False)
+
+
+def start_job(job_id, target, *args):
+    """Spawn a background download thread unless one is already running."""
+    with _jobs_lock:
+        if JOBS.get(job_id, {}).get("status") == "running":
+            return False
+        JOBS[job_id] = {"status": "running", "detail": "starting…",
+                        "done": 0, "total": 0, "cancel": False}
+    threading.Thread(target=target, args=(job_id, *args), daemon=True).start()
+    return True
+
+
+def pull_model_job(job_id, backend_url, model):
+    """Pull a model through Ollama's streaming /api/pull endpoint."""
+    try:
+        payload = json.dumps({"model": model, "name": model, "stream": True}).encode()
+        req = urllib.request.Request(
+            f"{backend_url}/api/pull", data=payload,
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req) as resp:
+            for raw in resp:
+                if job_cancelled(job_id):
+                    job_update(job_id, status="cancelled", detail="cancelled")
+                    return
+                try:
+                    ev = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                if ev.get("error"):
+                    job_update(job_id, status="error", detail=ev["error"])
+                    return
+                fields = {"detail": ev.get("status", "")}
+                if ev.get("total"):
+                    fields["total"] = ev["total"]
+                    fields["done"] = ev.get("completed", 0)
+                job_update(job_id, **fields)
+        job_update(job_id, status="done", detail="installed")
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        job_update(job_id, status="error", detail=f"pull failed: {exc}")
+
+
+def download_zim_job(job_id, files):
+    """Download ZIM file(s) to library/ with resume support."""
+    lib = ROOT / "library"
+    lib.mkdir(exist_ok=True)
+    try:
+        for idx, rel in enumerate(files, 1):
+            name = rel.rsplit("/", 1)[-1]
+            dest = lib / name
+            if dest.exists():
+                continue
+            part = lib / (name + ".part")
+            offset = part.stat().st_size if part.exists() else 0
+            headers = {"User-Agent": "xDrive"}
+            if offset:
+                headers["Range"] = f"bytes={offset}-"
+            req = urllib.request.Request(ZIM_BASE + rel, headers=headers)
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                resumed = resp.status == 206
+                if not resumed:
+                    offset = 0
+                total = int(resp.headers.get("Content-Length") or 0) + offset
+                job_update(job_id, detail=f"{name} ({idx}/{len(files)})",
+                           total=total, done=offset)
+                with open(part, "ab" if resumed else "wb") as f:
+                    while True:
+                        if job_cancelled(job_id):
+                            job_update(job_id, status="cancelled",
+                                       detail="cancelled — GET again to resume")
+                            return
+                        chunk = resp.read(512 * 1024)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        offset += len(chunk)
+                        job_update(job_id, done=offset)
+            if total and offset < total:
+                job_update(job_id, status="error",
+                           detail="connection dropped — GET again to resume")
+                return
+            part.replace(dest)
+        job_update(job_id, status="done",
+                   detail="installed — restart xDrive to mount it")
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        job_update(job_id, status="error", detail=f"download failed: {exc}")
+
+
+def local_commit():
+    try:
+        proc = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT,
+                              capture_output=True, text=True, timeout=10)
+        if proc.returncode == 0:
+            return proc.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return None
+
+
+# --------------------------------------------------------------------------
 # Agent tools (sandboxed to the workspace directory)
 # --------------------------------------------------------------------------
 
@@ -577,6 +733,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.handle_status()
         if path == "/api/knowledge/search":
             return self.handle_knowledge_search(query_string)
+        if path == "/api/downloads":
+            return self.handle_downloads()
+        if path == "/api/updates/check":
+            return self.handle_update_check()
         if path == "/api/config":
             return self.handle_get_config()
         if path == "/api/conversations":
@@ -595,6 +755,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.handle_chat()
             if path == "/api/config":
                 return self.handle_put_config()
+            if path == "/api/downloads/start":
+                return self.handle_download_start()
+            if path == "/api/downloads/cancel":
+                return self.handle_download_cancel()
+            if path == "/api/updates/apply":
+                return self.handle_update_apply()
             if path == "/api/stop":
                 return self.send_json({"ok": True})
         except (json.JSONDecodeError, KeyError, ValueError) as exc:
@@ -644,6 +810,92 @@ class Handler(BaseHTTPRequestHandler):
             "kiwix_online": kx_url is not None,
             "kiwix_books": [b["title"] for b in kx_books],
         })
+
+    def handle_downloads(self):
+        cfg = load_config()
+        _, _, installed_models = resolve_backend(cfg)
+        installed = set(installed_models)
+        lib = ROOT / "library"
+        models = [{**m, "installed": m["id"] in installed} for m in MODEL_CATALOG]
+        zims = [{"id": z["id"], "title": z["title"], "size": z["size"],
+                 "installed": all((lib / f.rsplit("/", 1)[-1]).exists()
+                                  for f in z["files"])}
+                for z in ZIM_CATALOG]
+        with _jobs_lock:
+            jobs = {k: {kk: vv for kk, vv in v.items() if kk != "cancel"}
+                    for k, v in JOBS.items()}
+        self.send_json({"models": models, "zims": zims, "jobs": jobs})
+
+    def handle_download_start(self):
+        body = self.read_json()
+        kind, item_id = body.get("kind"), body.get("id")
+        cfg = load_config()
+        if kind == "model":
+            if not any(m["id"] == item_id for m in MODEL_CATALOG):
+                return self.send_json({"error": "unknown model"}, 400)
+            backend_url, _, _ = resolve_backend(cfg)
+            if backend_url is None:
+                return self.send_json(
+                    {"error": "model runtime is not running — start Ollama first"}, 503)
+            started = start_job(f"model:{item_id}", pull_model_job,
+                                backend_url, item_id)
+        elif kind == "zim":
+            entry = next((z for z in ZIM_CATALOG if z["id"] == item_id), None)
+            if entry is None:
+                return self.send_json({"error": "unknown knowledge pack"}, 400)
+            started = start_job(f"zim:{item_id}", download_zim_job, entry["files"])
+        else:
+            return self.send_json({"error": "kind must be 'model' or 'zim'"}, 400)
+        self.send_json({"ok": True, "started": started})
+
+    def handle_download_cancel(self):
+        body = self.read_json()
+        job_id = body.get("job", "")
+        job_update(job_id, cancel=True)
+        self.send_json({"ok": True})
+
+    def handle_update_check(self):
+        current = local_commit()
+        result = {"current": (current or "")[:12] or None}
+        try:
+            req = urllib.request.Request(
+                f"{GH_API}/repos/{GITHUB_REPO}/commits/main",
+                headers={"User-Agent": "xDrive",
+                         "Accept": "application/vnd.github+json"})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            latest = data.get("sha", "")
+            result.update({
+                "online": True,
+                "latest": latest[:12],
+                "update_available": bool(current) and bool(latest)
+                                    and latest != current,
+                "latest_message": data["commit"]["message"].splitlines()[0][:100],
+                "latest_date": data["commit"]["committer"]["date"][:10],
+            })
+        except (urllib.error.URLError, json.JSONDecodeError, KeyError,
+                OSError, TimeoutError) as exc:
+            result.update({"online": False,
+                           "error": f"could not reach GitHub ({exc})"})
+        self.send_json(result)
+
+    def handle_update_apply(self):
+        if not (ROOT / ".git").exists():
+            return self.send_json({
+                "ok": False,
+                "output": "this copy of xDrive is not a git checkout — "
+                          "re-clone the repository to enable updates"})
+        try:
+            proc = subprocess.run(
+                ["git", "pull", "--ff-only", "origin", "main"],
+                cwd=ROOT, capture_output=True, text=True, timeout=120)
+            self.send_json({
+                "ok": proc.returncode == 0,
+                "output": (proc.stdout + proc.stderr).strip()[-2000:],
+                "note": "restart xDrive to finish updating",
+            })
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            self.send_json({"ok": False, "output": str(exc)})
 
     def handle_knowledge_search(self, query_string):
         cfg = load_config()

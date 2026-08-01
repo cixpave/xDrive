@@ -75,8 +75,8 @@
       <!-- Center terminal -->
       <main class="col col-main panel">
         <div class="panel-head tabs">
-          <span class="tab active">MAIN</span>
-          <span class="tab ghost">AI&nbsp;TERMINAL</span>
+          <button class="tab active" id="tab-chat">TERMINAL</button>
+          <button class="tab" id="tab-store">GET&nbsp;MORE</button>
           <span class="tab-fill"></span>
           <span id="stream-state" class="tab ghost">IDLE</span>
         </div>
@@ -111,7 +111,29 @@
           <div class="messages" id="messages"></div>
         </section>
 
-        <footer class="composer">
+        <!-- GET MORE: download models & knowledge, check for updates -->
+        <section class="store" id="store" hidden>
+          <div class="store-section">
+            <div class="store-head">// SYSTEM UPDATE <span class="store-sub">github.com/cixpave/xDrive</span></div>
+            <div class="upd-row">
+              <span class="upd-ver" id="upd-current">local: —</span>
+              <button class="term-btn" id="btn-check-upd">CHECK GITHUB</button>
+              <button class="term-btn upd-apply" id="btn-apply-upd" hidden>APPLY UPDATE</button>
+            </div>
+            <div class="upd-status" id="upd-status">not checked yet — requires a network connection</div>
+          </div>
+          <div class="store-section">
+            <div class="store-head">// MODELS <span class="store-sub">pulled via ollama · stored on this drive</span></div>
+            <div class="store-list" id="store-models"><div class="store-empty">loading…</div></div>
+          </div>
+          <div class="store-section">
+            <div class="store-head">// KNOWLEDGE <span class="store-sub">ZIM archives · saved to library/</span></div>
+            <div class="store-list" id="store-zims"><div class="store-empty">loading…</div></div>
+          </div>
+          <div class="store-note">downloads need internet once — everything runs offline afterwards. interrupted downloads resume when you hit GET again.</div>
+        </section>
+
+        <footer class="composer" id="composer">
           <span class="prompt-sign" id="prompt-sign">❯</span>
           <textarea id="input" rows="1" spellcheck="false" placeholder="enter query…"></textarea>
           <button id="btn-send" class="send-btn" title="Send [Enter]">EXEC</button>

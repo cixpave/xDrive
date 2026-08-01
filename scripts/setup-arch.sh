@@ -35,6 +35,9 @@ if systemctl list-unit-files ollama.service >/dev/null 2>&1; then
     sudo systemctl enable --now ollama || true
 fi
 
+# Put xDrive in the desktop application launcher.
+"$DRIVE_DIR/scripts/install-desktop.sh" || true
+
 echo
 echo "Done. Next steps (while you still have internet):"
 echo "  1. Download models:               ./scripts/pull-models.sh"
