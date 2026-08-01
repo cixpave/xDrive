@@ -63,6 +63,14 @@ function setMeter(bar, val, pct, text) {
   $(val).textContent = text;
 }
 
+function fmtRate(bps) {
+  if (bps == null) return "—";
+  const units = ["B/s", "KB/s", "MB/s", "GB/s"];
+  let i = 0;
+  while (bps >= 1024 && i < units.length - 1) { bps /= 1024; i++; }
+  return `${bps.toFixed(bps >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
 function fmtGB(bytes) {
   if (bytes == null) return "?";
   const gb = bytes / 1024 ** 3;
@@ -108,6 +116,11 @@ async function refreshSystem() {
     } else {
       setMeter("m-gpu", "v-gpu", null, "N/A");
       $("mt-gpu").title = "no GPU detected (nvidia-smi / amdgpu sysfs)";
+    }
+
+    if (s.net) {
+      $("net-down").textContent = fmtRate(s.net.rx_bps);
+      $("net-up").textContent = fmtRate(s.net.tx_bps);
     }
 
     const dpct = (s.disk.used / s.disk.total) * 100;
@@ -634,18 +647,18 @@ function storeRow(kind, item, job) {
   const name = document.createElement("span");
   name.className = "item-name";
   name.textContent = kind === "model" ? item.id : item.title;
+  name.title = name.textContent;
   row.append(name);
 
-  if (item.cat) {
-    const cat = document.createElement("span");
-    cat.className = "item-cat";
-    cat.textContent = item.cat.toUpperCase();
-    row.append(cat);
-  }
+  const cat = document.createElement("span");
+  cat.className = "item-cat";
+  cat.textContent = (item.cat || "—").toUpperCase();
+  row.append(cat);
 
   const desc = document.createElement("span");
   desc.className = "item-desc";
   desc.textContent = item.desc || "";
+  desc.title = item.desc || "";
   row.append(desc);
 
   const size = document.createElement("span");
@@ -801,8 +814,18 @@ async function applyUpdate() {
 async function restartServer() {
   logActivity("restarting server…");
   try {
-    await fetch("/api/restart", { method: "POST" });
+    const res = await fetch("/api/restart", { method: "POST" });
+    if (res.status === 404) {
+      // server predates the restart endpoint entirely
+      logActivity("server too old for in-app restart — close this window and relaunch xDrive", true);
+      alert("This server is too old to restart itself.\nClose this window and relaunch xDrive — the launcher will replace it.");
+      return;
+    }
   } catch (_) { /* connection drops as the process re-execs */ }
+  await restartWait();
+}
+
+async function restartWait() {
   const deadline = Date.now() + 20000;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 700));
@@ -889,6 +912,30 @@ $("tab-store").addEventListener("click", () => switchView("store"));
 $("btn-check-upd").addEventListener("click", checkUpdates);
 $("btn-apply-upd").addEventListener("click", applyUpdate);
 $("btn-restart-upd").addEventListener("click", restartServer);
+$("btn-wipe-chats").addEventListener("click", async () => {
+  if (!confirm("Delete ALL chat sessions? This cannot be undone.")) return;
+  await fetch("/api/wipe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scope: "chats" }),
+  });
+  logActivity("all chats wiped");
+  newChat();
+});
+$("btn-wipe-all").addEventListener("click", async () => {
+  if (!confirm("FACTORY RESET: delete all chats, the agent workspace, and settings?\n(Models and downloaded books are kept.)")) return;
+  if (!confirm("Really sure? This cannot be undone.")) return;
+  try {
+    await fetch("/api/wipe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scope: "all" }),
+    });
+  } catch (_) { /* server restarts */ }
+  $("settings-modal").hidden = true;
+  logActivity("factory reset — restarting fresh");
+  await restartWait();
+});
 $("btn-restart").addEventListener("click", () => {
   if (confirm("Restart the xDrive server? Active streams will stop.")) restartServer();
 });

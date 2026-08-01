@@ -74,7 +74,26 @@ open_app_window() {
     xdg-open "$URL" >/dev/null 2>&1 || echo "Open $URL in your browser."
 }
 
+# If a server is already running but was started from older code than what
+# is now on disk (e.g. after an update), kill it so the fresh code loads —
+# otherwise fixes stay dormant and the app looks broken forever.
+kill_stale_server() {
+    server_up || return 0
+    local disk running
+    disk="$(git rev-parse HEAD 2>/dev/null | cut -c1-12 || true)"
+    [ -n "$disk" ] || return 0
+    running="$(curl -sf -m 2 "$URL/api/status" |
+        sed -n 's/.*"running_commit": "\([0-9a-f]*\)".*/\1/p')"
+    if [ "$running" != "$disk" ]; then
+        echo "Running server is outdated (${running:-unknown} vs $disk) — restarting it..."
+        # bracket keeps this pattern from matching the shell running it
+        pkill -f "[x]drive/server.py" 2>/dev/null || true
+        sleep 1
+    fi
+}
+
 if [ "$APP_MODE" = "1" ]; then
+    kill_stale_server
     if ! server_up; then
         nohup python3 xdrive/server.py >/dev/null 2>&1 &
         for _ in $(seq 1 40); do
@@ -85,6 +104,8 @@ if [ "$APP_MODE" = "1" ]; then
     open_app_window
     exit 0
 fi
+
+kill_stale_server
 
 # Terminal mode: open the UI in the default browser once the server is up.
 ( sleep 1.5; xdg-open "$URL" >/dev/null 2>&1 || true ) &
