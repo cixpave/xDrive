@@ -591,8 +591,10 @@ def download_zim_job(job_id, files):
                            detail="connection dropped — GET again to resume")
                 return
             part.replace(dest)
+        mounted = restart_kiwix()
         job_update(job_id, status="done",
-                   detail="installed — restart xDrive to mount it")
+                   detail="installed — knowledge base mounted" if mounted
+                   else "installed — restart xDrive to mount it")
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
         job_update(job_id, status="error", detail=f"download failed: {exc}")
 
@@ -718,6 +720,60 @@ def local_commit():
     except (OSError, subprocess.TimeoutExpired):
         pass
     return None
+
+
+# Commit the RUNNING process was started from. If an update is pulled while
+# the server is running, this diverges from local_commit() until a restart —
+# that's how the UI knows to offer RESTART instead of looking "fixed".
+RUNNING_COMMIT = local_commit()
+
+
+# --------------------------------------------------------------------------
+# kiwix-serve lifecycle (mount/remount the knowledge base)
+# --------------------------------------------------------------------------
+
+def kiwix_binary():
+    found = shutil.which("kiwix-serve")
+    if found:
+        return found
+    bundled = ROOT / "tools" / "kiwix" / (
+        "kiwix-serve.exe" if sys.platform == "win32" else "kiwix-serve")
+    return str(bundled) if bundled.exists() else None
+
+
+def restart_kiwix():
+    """(Re)start kiwix-serve on port 8181 with everything in library/.
+
+    Best-effort: used at startup, after a restart, and when a new ZIM
+    finishes downloading so it mounts without any manual step.
+    """
+    binary = kiwix_binary()
+    zims = sorted((ROOT / "library").glob("*.zim"))
+    if not binary or not zims:
+        return False
+    try:  # stop whatever instance is currently holding port 8181
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/F", "/IM", "kiwix-serve.exe"],
+                           capture_output=True, timeout=10)
+        else:
+            subprocess.run(["pkill", "-f", "kiwix-serve"],
+                           capture_output=True, timeout=10)
+        time.sleep(0.5)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    try:
+        subprocess.Popen([binary, "--port", "8181", *map(str, zims)],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+        return True
+    except OSError:
+        return False
+
+
+def ensure_kiwix(cfg):
+    """Start kiwix-serve if ZIMs exist but nothing is serving them yet."""
+    if resolve_kiwix(cfg)[0] is None:
+        restart_kiwix()
 
 
 # --------------------------------------------------------------------------
@@ -905,6 +961,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.handle_download_cancel()
             if path == "/api/updates/apply":
                 return self.handle_update_apply()
+            if path == "/api/restart":
+                return self.handle_restart()
             if path == "/api/stop":
                 return self.send_json({"ok": True})
         except (json.JSONDecodeError, KeyError, ValueError) as exc:
@@ -1009,9 +1067,27 @@ class Handler(BaseHTTPRequestHandler):
         job_update(job_id, cancel=True)
         self.send_json({"ok": True})
 
+    def handle_restart(self):
+        """Re-exec the server so freshly pulled code (or new config) loads."""
+        self.send_json({"ok": True, "note": "restarting"})
+
+        def _re_exec():
+            time.sleep(0.6)
+            os.execv(sys.executable,
+                     [sys.executable, str(Path(__file__).resolve())])
+
+        threading.Thread(target=_re_exec, daemon=True).start()
+
     def handle_update_check(self):
         current = local_commit()
-        result = {"current": (current or "")[:12] or None}
+        result = {
+            "current": (current or "")[:12] or None,
+            "running": (RUNNING_COMMIT or "")[:12] or None,
+            # true when a newer version is on disk but this process still
+            # runs the old code (pulled while running, no restart yet)
+            "restart_needed": bool(current) and bool(RUNNING_COMMIT)
+                              and current != RUNNING_COMMIT,
+        }
         try:
             req = urllib.request.Request(
                 f"{GH_API}/repos/{GITHUB_REPO}/commits/main",
@@ -1204,6 +1280,7 @@ def main():
         save_config(cfg)
     conversations_dir(cfg)
     workspace_dir(cfg)
+    ensure_kiwix(cfg)
 
     host = cfg.get("host", "127.0.0.1")
     port = int(os.environ.get("XDRIVE_PORT", cfg.get("port", 8484)))
