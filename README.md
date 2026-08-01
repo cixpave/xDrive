@@ -81,6 +81,8 @@ cd xDrive
 This installs and configures everything:
 
 - `python` and `ollama` via pacman
+- `python-gobject`, `gtk3`, and `webkit2gtk-4.1` — gives xDrive its own
+  native application window (no browser involved)
 - `kiwix-tools` (via pacman, or a static binary into `tools/kiwix/`) — serves
   the offline knowledge base
 - points Ollama's model store at `models/ollama/` **on the drive** (user
@@ -158,8 +160,13 @@ future context so long sessions stay fast.
   DevDocs pack into `library/`. Downloads resume if interrupted — just hit
   `GET` again.
 
+**KNOWLEDGE panel** — shows every mounted book; click one to open it in the
+Kiwix reader, or hit OPEN READER for the whole library. **NETWORK panel** —
+live status of all three local services (UI, LLM, wiki server).
+
 **INVERT** — flips the black terminal to a white theme. **CONFIG** — backend
-URL, default model, temperature, system prompt.
+URL, default model, temperature, system prompt, agent limits (tool steps,
+command timeout), and the knowledge base URL.
 
 ---
 
@@ -202,6 +209,7 @@ then double-click **`start.bat`**.
 | KNOWLEDGE panel says OFFLINE | no ZIMs in `library/` yet, or kiwix-serve isn't running — relaunch xDrive after downloading |
 | Port 8484 already in use | `XDRIVE_PORT=9090 ./start.sh` |
 | Launcher entry missing after moving the drive | `./scripts/install-desktop.sh` (it stores the absolute path) |
+| Opens in a browser instead of its own window | `sudo pacman -S --needed webkit2gtk-4.1 python-gobject gtk3`, then relaunch |
 | APPLY UPDATE fails | local changes on the drive: `git stash && git pull --ff-only origin main` inside the repo |
 | Updated (git pull / APPLY UPDATE) but nothing changed | the old server process is still running — hit **RESTART** (bottom-left, or offered in GET MORE), or `pkill -f xdrive/server.py` and relaunch |
 | Downloaded knowledge doesn't show in KNOWLEDGE panel | new ZIMs auto-mount after download; if BOOKS stays 0, hit **RESTART** |
@@ -210,6 +218,7 @@ then double-click **`start.bat`**.
 
 ```
 xdrive/server.py   the entire backend — one file, Python stdlib only
+xdrive/window.py   native GTK/WebKit app window
 web/               terminal UI (vanilla JS + bundled marked/highlight)
 scripts/           setup, model/knowledge downloads, desktop-entry install
 assets/            app icon

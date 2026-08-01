@@ -3,7 +3,7 @@
 #
 #   ./start.sh          run the server in this terminal + open a browser tab
 #   ./start.sh --app    desktop-app mode: server in the background, xDrive
-#                       opens in its own window (used by the launcher entry)
+#                       opens as a native window (used by the launcher entry)
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -33,26 +33,31 @@ if command -v ollama >/dev/null 2>&1; then
     fi
 fi
 
-# Serve the offline knowledge base (Wikipedia, dev docs) if present.
-KIWIX_BIN=""
-if command -v kiwix-serve >/dev/null 2>&1; then
-    KIWIX_BIN="kiwix-serve"
-elif [ -x "tools/kiwix/kiwix-serve" ]; then
-    KIWIX_BIN="tools/kiwix/kiwix-serve"
-fi
-if [ -n "$KIWIX_BIN" ] && ls library/*.zim >/dev/null 2>&1; then
-    if ! curl -sf -m 2 http://127.0.0.1:8181/catalog/v2/entries >/dev/null 2>&1; then
-        echo "Starting knowledge base (kiwix-serve, library/)..."
-        nohup "$KIWIX_BIN" --port 8181 library/*.zim >/dev/null 2>&1 &
-    fi
-fi
+# (kiwix-serve is managed by the xDrive server itself: started at boot when
+# library/*.zim exist, restarted when new knowledge finishes downloading.)
 
 server_up() {
     curl -sf -m 2 "$URL/api/status" >/dev/null 2>&1
 }
 
-# Open xDrive in its own window (chromium app mode), falling back to a tab.
+native_window_available() {
+    python3 - >/dev/null 2>&1 <<'PY'
+import gi
+gi.require_version("Gtk", "3.0")
+try:
+    gi.require_version("WebKit2", "4.1")
+except ValueError:
+    gi.require_version("WebKit2", "4.0")
+PY
+}
+
+# Open xDrive as a native GTK window; fall back to a browser if the
+# GTK/WebKit stack isn't installed (see scripts/setup-arch.sh).
 open_app_window() {
+    if native_window_available; then
+        nohup python3 xdrive/window.py "$URL" >/dev/null 2>&1 &
+        return 0
+    fi
     local browser
     for browser in chromium chromium-browser google-chrome-stable \
                    google-chrome brave brave-browser vivaldi-stable \
