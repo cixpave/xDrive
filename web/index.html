@@ -41,6 +41,33 @@
         </section>
 
         <section class="panel">
+          <div class="panel-head">HARDWARE</div>
+          <div class="panel-body hw">
+            <div class="meter" id="mt-cpu" title="">
+              <span class="m-label">CPU</span>
+              <span class="m-bar"><span class="m-fill" id="m-cpu"></span></span>
+              <span class="m-val" id="v-cpu">—</span>
+            </div>
+            <div class="meter" id="mt-ram">
+              <span class="m-label">RAM</span>
+              <span class="m-bar"><span class="m-fill" id="m-ram"></span></span>
+              <span class="m-val" id="v-ram">—</span>
+            </div>
+            <div class="meter" id="mt-gpu" title="">
+              <span class="m-label">GPU</span>
+              <span class="m-bar"><span class="m-fill" id="m-gpu"></span></span>
+              <span class="m-val" id="v-gpu">—</span>
+            </div>
+            <div class="meter" id="mt-drive" title="">
+              <span class="m-label">DRIVE</span>
+              <span class="m-bar"><span class="m-fill" id="m-drive"></span></span>
+              <span class="m-val" id="v-drive">—</span>
+            </div>
+            <div class="hw-detail" id="hw-detail">probing hardware…</div>
+          </div>
+        </section>
+
+        <section class="panel">
           <div class="panel-head">MODEL</div>
           <div class="panel-body">
             <select id="model-select" class="model-select"></select>

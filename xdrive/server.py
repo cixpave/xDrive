@@ -444,7 +444,7 @@ MODEL_CATALOG = [
 ]
 
 _DEVDOCS = ["python", "javascript", "typescript", "node", "html", "css", "c",
-            "cpp", "rust", "go", "java", "bash", "git", "docker",
+            "cpp", "rust", "go", "openjdk", "bash", "git", "docker",
             "postgresql", "react", "rails"]
 
 ZIM_CATALOG = [
@@ -461,7 +461,7 @@ ZIM_CATALOG = [
     {"id": "stackoverflow",    "title": "Stack Overflow — every question & answer",
      "size": "~75 GB",  "files": ["stack_exchange/stackoverflow.com_en_all.zim"]},
     {"id": "wiktionary",       "title": "Wiktionary — English dictionary",
-     "size": "~7 GB",   "files": ["wiktionary/wiktionary_en_all_maxi.zim"]},
+     "size": "~7 GB",   "files": ["wiktionary/wiktionary_en_all_nopic.zim"]},
     {"id": "wikibooks",        "title": "Wikibooks — textbooks & manuals",
      "size": "~4 GB",   "files": ["wikibooks/wikibooks_en_all_maxi.zim"]},
 ]
@@ -521,12 +521,42 @@ def pull_model_job(job_id, backend_url, model):
         job_update(job_id, status="error", detail=f"pull failed: {exc}")
 
 
+def resolve_zim_file(rel):
+    """Resolve 'devdocs/devdocs_en_python.zim' to the latest dated file.
+
+    Kiwix only hosts dated snapshots (name_YYYY-MM.zim), so we read the
+    directory listing and pick the newest match.
+    """
+    folder, fname = rel.rsplit("/", 1)
+    stem = fname[:-4] if fname.endswith(".zim") else fname
+    req = urllib.request.Request(f"{ZIM_BASE}{folder}/",
+                                 headers={"User-Agent": "xDrive"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        listing = resp.read().decode("utf-8", errors="replace")
+    dates = re.findall(
+        rf'href="{re.escape(stem)}_(\d{{4}}-\d{{2}})\.zim"', listing)
+    if not dates:
+        raise FileNotFoundError(
+            f"{stem} not found on the download server (catalog outdated?)")
+    return f"{folder}/{stem}_{max(dates)}.zim"
+
+
+def zim_stem_installed(lib, rel):
+    """True if any snapshot of this ZIM (dated or not) is in library/."""
+    stem = rel.rsplit("/", 1)[-1][:-4]
+    return any(lib.glob(f"{stem}.zim")) or any(lib.glob(f"{stem}_*.zim"))
+
+
 def download_zim_job(job_id, files):
     """Download ZIM file(s) to library/ with resume support."""
     lib = ROOT / "library"
     lib.mkdir(exist_ok=True)
     try:
         for idx, rel in enumerate(files, 1):
+            if zim_stem_installed(lib, rel):
+                continue
+            job_update(job_id, detail=f"resolving latest version… ({idx}/{len(files)})")
+            rel = resolve_zim_file(rel)
             name = rel.rsplit("/", 1)[-1]
             dest = lib / name
             if dest.exists():
@@ -565,6 +595,118 @@ def download_zim_job(job_id, files):
                    detail="installed — restart xDrive to mount it")
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
         job_update(job_id, status="error", detail=f"download failed: {exc}")
+
+
+# --------------------------------------------------------------------------
+# Hardware / drive stats
+# --------------------------------------------------------------------------
+
+_cpu_sample = {}
+
+
+def cpu_percent():
+    """CPU utilisation since the previous call (Linux /proc/stat delta)."""
+    try:
+        with open("/proc/stat") as f:
+            parts = [int(x) for x in f.readline().split()[1:]]
+        idle = parts[3] + (parts[4] if len(parts) > 4 else 0)
+        total = sum(parts)
+        prev = _cpu_sample.get("stat")
+        _cpu_sample["stat"] = (idle, total)
+        if prev and total > prev[1]:
+            return round(100 * (1 - (idle - prev[0]) / (total - prev[1])), 1)
+        return None  # first sample — caller shows a placeholder once
+    except (OSError, ValueError, IndexError):
+        pass
+    try:  # non-Linux fallback: normalised 1-minute load
+        return round(min(100.0, os.getloadavg()[0] / (os.cpu_count() or 1) * 100), 1)
+    except (OSError, AttributeError):
+        return None
+
+
+def cpu_name():
+    try:
+        with open("/proc/cpuinfo") as f:
+            for line in f:
+                if line.lower().startswith("model name"):
+                    return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    import platform
+    return platform.processor() or platform.machine() or "unknown CPU"
+
+
+def mem_info():
+    """Return (total_bytes, used_bytes) or (None, None)."""
+    try:
+        info = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                key, _, rest = line.partition(":")
+                info[key] = int(rest.strip().split()[0]) * 1024
+        total = info.get("MemTotal", 0)
+        avail = info.get("MemAvailable", info.get("MemFree", 0))
+        return total, total - avail
+    except (OSError, ValueError):
+        pass
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            class MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [("dwLength", ctypes.c_ulong),
+                            ("dwMemoryLoad", ctypes.c_ulong),
+                            ("ullTotalPhys", ctypes.c_ulonglong),
+                            ("ullAvailPhys", ctypes.c_ulonglong),
+                            ("ullTotalPageFile", ctypes.c_ulonglong),
+                            ("ullAvailPageFile", ctypes.c_ulonglong),
+                            ("ullTotalVirtual", ctypes.c_ulonglong),
+                            ("ullAvailVirtual", ctypes.c_ulonglong),
+                            ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+
+            stat = MEMORYSTATUSEX()
+            stat.dwLength = ctypes.sizeof(stat)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
+            return stat.ullTotalPhys, stat.ullTotalPhys - stat.ullAvailPhys
+        except (OSError, AttributeError):
+            pass
+    return None, None
+
+
+def gpu_info():
+    """Return {name, util, vram_used, vram_total} or None."""
+    if shutil.which("nvidia-smi"):
+        try:
+            proc = subprocess.run(
+                ["nvidia-smi",
+                 "--query-gpu=name,utilization.gpu,memory.used,memory.total",
+                 "--format=csv,noheader,nounits"],
+                capture_output=True, text=True, timeout=5)
+            if proc.returncode == 0 and proc.stdout.strip():
+                name, util, used, total = [
+                    x.strip() for x in proc.stdout.strip().splitlines()[0].split(",")]
+                return {"name": name, "util": float(util),
+                        "vram_used": int(float(used)) * 1024 * 1024,
+                        "vram_total": int(float(total)) * 1024 * 1024}
+        except (OSError, ValueError, subprocess.TimeoutExpired, IndexError):
+            pass
+    try:  # AMD (amdgpu exposes utilisation via sysfs)
+        for card in sorted(Path("/sys/class/drm").glob("card[0-9]")):
+            busy = card / "device" / "gpu_busy_percent"
+            if not busy.exists():
+                continue
+            util = float(busy.read_text().strip())
+            vram_used = vram_total = None
+            vu = card / "device" / "mem_info_vram_used"
+            vt = card / "device" / "mem_info_vram_total"
+            if vu.exists() and vt.exists():
+                vram_used = int(vu.read_text().strip())
+                vram_total = int(vt.read_text().strip())
+            return {"name": "AMD GPU", "util": util,
+                    "vram_used": vram_used, "vram_total": vram_total}
+    except (OSError, ValueError):
+        pass
+    return None
 
 
 def local_commit():
@@ -735,6 +877,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.handle_knowledge_search(query_string)
         if path == "/api/downloads":
             return self.handle_downloads()
+        if path == "/api/system":
+            return self.handle_system()
         if path == "/api/updates/check":
             return self.handle_update_check()
         if path == "/api/config":
@@ -811,6 +955,17 @@ class Handler(BaseHTTPRequestHandler):
             "kiwix_books": [b["title"] for b in kx_books],
         })
 
+    def handle_system(self):
+        du = shutil.disk_usage(ROOT)
+        mem_total, mem_used = mem_info()
+        self.send_json({
+            "disk": {"total": du.total, "used": du.used, "free": du.free},
+            "cpu": {"name": cpu_name(), "cores": os.cpu_count(),
+                    "percent": cpu_percent()},
+            "mem": {"total": mem_total, "used": mem_used},
+            "gpu": gpu_info(),
+        })
+
     def handle_downloads(self):
         cfg = load_config()
         _, _, installed_models = resolve_backend(cfg)
@@ -818,7 +973,7 @@ class Handler(BaseHTTPRequestHandler):
         lib = ROOT / "library"
         models = [{**m, "installed": m["id"] in installed} for m in MODEL_CATALOG]
         zims = [{"id": z["id"], "title": z["title"], "size": z["size"],
-                 "installed": all((lib / f.rsplit("/", 1)[-1]).exists()
+                 "installed": all(zim_stem_installed(lib, f)
                                   for f in z["files"])}
                 for z in ZIM_CATALOG]
         with _jobs_lock:

@@ -35,13 +35,68 @@ marked.setOptions({ breaks: true, gfm: true });
 function tickClock() {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, "0");
-  $("clock").textContent =
-    `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  const h24 = now.getHours();
+  const h12 = h24 % 12 || 12;
+  const ampm = h24 < 12 ? "AM" : "PM";
+  $("clock").innerHTML =
+    `${h12}:${pad(now.getMinutes())}:${pad(now.getSeconds())}<span class="ampm">${ampm}</span>`;
   $("sys-date").textContent =
     `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
   const up = Math.floor((Date.now() - state.bootedAt) / 1000);
   $("sys-uptime").textContent =
     `${pad(Math.floor(up / 3600))}:${pad(Math.floor((up % 3600) / 60))}:${pad(up % 60)}`;
+}
+
+/* ───────── hardware stats ───────── */
+
+function setMeter(bar, val, pct, text) {
+  $(bar).style.width = (pct == null ? 0 : Math.min(100, pct)) + "%";
+  $(bar).classList.toggle("hot", pct != null && pct >= 85);
+  $(val).textContent = text;
+}
+
+function fmtGB(bytes) {
+  if (bytes == null) return "?";
+  const gb = bytes / 1024 ** 3;
+  return gb >= 1000 ? (gb / 1024).toFixed(2) + " TB" : gb.toFixed(gb >= 100 ? 0 : 1) + " GB";
+}
+
+async function refreshSystem() {
+  try {
+    const s = await (await fetch("/api/system")).json();
+
+    const cpuPct = s.cpu.percent;
+    setMeter("m-cpu", "v-cpu", cpuPct, cpuPct == null ? "—" : cpuPct.toFixed(0) + "%");
+    $("mt-cpu").title = `${s.cpu.name} · ${s.cpu.cores} cores`;
+
+    if (s.mem.total) {
+      const pct = (s.mem.used / s.mem.total) * 100;
+      setMeter("m-ram", "v-ram", pct, pct.toFixed(0) + "%");
+      $("mt-ram").title = `${fmtGB(s.mem.used)} / ${fmtGB(s.mem.total)}`;
+    } else {
+      setMeter("m-ram", "v-ram", null, "—");
+    }
+
+    if (s.gpu) {
+      setMeter("m-gpu", "v-gpu", s.gpu.util, s.gpu.util.toFixed(0) + "%");
+      $("mt-gpu").title = s.gpu.vram_total
+        ? `${s.gpu.name} · VRAM ${fmtGB(s.gpu.vram_used)} / ${fmtGB(s.gpu.vram_total)}`
+        : s.gpu.name;
+    } else {
+      setMeter("m-gpu", "v-gpu", null, "N/A");
+      $("mt-gpu").title = "no GPU detected (nvidia-smi / amdgpu sysfs)";
+    }
+
+    const dpct = (s.disk.used / s.disk.total) * 100;
+    setMeter("m-drive", "v-drive", dpct, dpct.toFixed(0) + "%");
+    $("mt-drive").title = `${fmtGB(s.disk.used)} used / ${fmtGB(s.disk.total)}`;
+
+    const gpuName = s.gpu ? s.gpu.name : "no gpu";
+    $("hw-detail").textContent =
+      `${s.cpu.name.split("@")[0].trim()} · ${s.cpu.cores}c · ` +
+      `${fmtGB(s.mem.total)} ram · ${gpuName} · ` +
+      `drive ${fmtGB(s.disk.free)} free`;
+  } catch (_) { /* server briefly unreachable */ }
 }
 
 /* ───────── activity log ───────── */
@@ -771,7 +826,10 @@ applyTheme(localStorage.getItem("xdrive-theme") || "dark");
 tickClock();
 setInterval(tickClock, 1000);
 refreshStatus();
+refreshSystem();
+setTimeout(refreshSystem, 1200); // second sample so CPU% has a delta
 refreshConversations();
 setInterval(refreshStatus, 20000);
+setInterval(refreshSystem, 5000);
 logActivity("xDrive terminal ready");
 els.input.focus();
