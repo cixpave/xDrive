@@ -174,8 +174,25 @@
         <section class="panel">
           <div class="panel-head">NETWORK</div>
           <div class="panel-body net-body">
-            <div class="net-ring" id="net-ring"><span id="net-state">OFFLINE</span></div>
-            <div class="kv"><span>BIND</span><b>127.0.0.1</b></div>
+            <div class="net-banner" id="net-banner">
+              <span class="net-shield">⛨</span>
+              <span class="net-banner-text">AIR·GAPPED<small>all traffic stays on this machine</small></span>
+            </div>
+            <div class="svc">
+              <span class="svc-dot on" id="svc-ui"></span>
+              <span class="svc-name">UI</span>
+              <span class="svc-addr" id="svc-ui-addr">127.0.0.1:8484</span>
+            </div>
+            <div class="svc">
+              <span class="svc-dot" id="svc-llm"></span>
+              <span class="svc-name">LLM</span>
+              <span class="svc-addr" id="svc-llm-addr">probing…</span>
+            </div>
+            <div class="svc">
+              <span class="svc-dot" id="svc-kiwix"></span>
+              <span class="svc-name">WIKI</span>
+              <span class="svc-addr" id="svc-kiwix-addr">probing…</span>
+            </div>
             <div class="kv"><span>EXPOSED</span><b>NOTHING</b></div>
           </div>
         </section>
@@ -190,10 +207,13 @@
         </section>
 
         <section class="panel">
-          <div class="panel-head">KNOWLEDGE</div>
+          <div class="panel-head">KNOWLEDGE
+            <button class="head-btn" id="kx-open" title="Open the Kiwix reader" hidden>OPEN READER</button>
+          </div>
           <div class="panel-body">
             <div class="kv"><span>BASE</span><b id="kx-state">PROBING…</b></div>
-            <div class="kv"><span>BOOKS</span><b id="kx-books" title="">0</b></div>
+            <div class="kv"><span>BOOKS</span><b id="kx-books">0</b></div>
+            <div class="kx-books-list" id="kx-books-list"></div>
             <input id="kx-query" class="kx-input" placeholder="search offline wiki…" spellcheck="false">
             <div id="kx-results" class="kx-results"></div>
           </div>
@@ -242,9 +262,27 @@
           <span>SYSTEM PROMPT</span>
           <textarea id="set-system" rows="4"></textarea>
         </label>
+        <div class="field-row">
+          <label class="field">
+            <span>MAX TOOL STEPS <small>per message</small></span>
+            <input type="number" id="set-steps" min="1" max="50" step="1">
+          </label>
+          <label class="field">
+            <span>CMD TIMEOUT <small>seconds</small></span>
+            <input type="number" id="set-timeout" min="5" max="3600" step="5">
+          </label>
+        </div>
+        <label class="field">
+          <span>KNOWLEDGE BASE URL <small>("auto" probes kiwix-serve on 8181)</small></span>
+          <input type="text" id="set-kiwix" placeholder="auto">
+        </label>
         <div class="field">
           <span>AGENT WORKSPACE</span>
           <code id="set-workspace" class="ws-path"></code>
+        </div>
+        <div class="field">
+          <span>PATHS &amp; PORTS <small>read-only · edit config.json to change</small></span>
+          <code id="set-info" class="ws-path"></code>
         </div>
       </div>
       <div class="modal-foot">

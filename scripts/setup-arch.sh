@@ -8,7 +8,12 @@ DRIVE_DIR="$(pwd)"
 echo "── xDrive setup (Arch Linux) ──────────────────────────"
 echo "Drive location: $DRIVE_DIR"
 
-sudo pacman -S --needed --noconfirm python ollama
+sudo pacman -S --needed --noconfirm python ollama python-gobject gtk3
+
+# WebKitGTK gives xDrive a native app window (no browser involved).
+sudo pacman -S --needed --noconfirm webkit2gtk-4.1 ||
+    sudo pacman -S --needed --noconfirm webkit2gtk ||
+    echo "note: webkit2gtk not installed — xDrive will open in a browser window instead"
 
 # kiwix-serve hosts the offline knowledge base (Wikipedia, dev docs).
 if ! sudo pacman -S --needed --noconfirm kiwix-tools 2>/dev/null; then

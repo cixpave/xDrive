@@ -26,9 +26,14 @@ const state = {
   abort: null,
   online: false,
   bootedAt: Date.now(),
+  // server uptime anchor: {atMs, seconds} from the last /api/system poll
+  uptimeAnchor: null,
+  sysFails: 0,
 };
 
 marked.setOptions({ breaks: true, gfm: true });
+
+let sysTimer = null; // /api/system poll handle (stopped if the server is stale)
 
 /* ───────── clock / uptime ───────── */
 
@@ -42,7 +47,10 @@ function tickClock() {
     `${h12}:${pad(now.getMinutes())}:${pad(now.getSeconds())}<span class="ampm">${ampm}</span>`;
   $("sys-date").textContent =
     `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-  const up = Math.floor((Date.now() - state.bootedAt) / 1000);
+  // real server uptime when known; page uptime until the first poll lands
+  const up = state.uptimeAnchor
+    ? state.uptimeAnchor.seconds + Math.floor((Date.now() - state.uptimeAnchor.atMs) / 1000)
+    : Math.floor((Date.now() - state.bootedAt) / 1000);
   $("sys-uptime").textContent =
     `${pad(Math.floor(up / 3600))}:${pad(Math.floor((up % 3600) / 60))}:${pad(up % 60)}`;
 }
@@ -63,7 +71,22 @@ function fmtGB(bytes) {
 
 async function refreshSystem() {
   try {
-    const s = await (await fetch("/api/system")).json();
+    const res = await fetch("/api/system");
+    if (!res.ok) {
+      // an old server process (started before this endpoint existed) 404s
+      // forever — say so instead of spamming and pretending to probe
+      if (++state.sysFails >= 2) {
+        $("hw-detail").textContent =
+          "stats unavailable — server is running old code, hit RESTART";
+        clearInterval(sysTimer);
+      }
+      return;
+    }
+    state.sysFails = 0;
+    const s = await res.json();
+    if (s.uptime_s != null) {
+      state.uptimeAnchor = { atMs: Date.now(), seconds: s.uptime_s };
+    }
 
     const cpuPct = s.cpu.percent;
     setMeter("m-cpu", "v-cpu", cpuPct, cpuPct == null ? "—" : cpuPct.toFixed(0) + "%");
@@ -268,8 +291,6 @@ async function refreshStatus() {
     els.statusText.textContent = s.online ? "UP" : "DOWN";
     $("sys-backend").textContent = s.online ? s.backend_kind.toUpperCase() : "NONE";
     $("sys-models").textContent = s.models.length;
-    $("net-state").textContent = s.online ? "AIR·GAPPED" : "NO RUNTIME";
-    $("net-state").className = s.online ? "on" : "";
     $("boot-runtime").textContent = s.online
       ? `> runtime online: ${s.backend_kind} · ${s.models.length} model(s) loaded`
       : "> no LLM runtime found — start ollama or llama-server";
@@ -277,11 +298,39 @@ async function refreshStatus() {
     $("kx-state").textContent = s.kiwix_online ? "ONLINE" : "OFFLINE";
     $("kx-state").style.color = s.kiwix_online ? "var(--accent)" : "";
     $("kx-books").textContent = books.length;
-    $("kx-books").title = books.join("\n");
     $("boot-knowledge").textContent = s.kiwix_online
       ? `> knowledge base mounted: ${books.length} book(s) — wikipedia & docs on-drive`
-      : "> knowledge base not running — run scripts/pull-knowledge to add wikipedia & docs";
+      : "> knowledge base not running — download books in GET MORE";
     state.kiwixViewer = s.kiwix_url;
+
+    // mounted books, each opening in the kiwix reader
+    const list = $("kx-books-list");
+    list.innerHTML = "";
+    for (const b of books.slice(0, 12)) {
+      const a = document.createElement("a");
+      a.className = "kx-book";
+      a.textContent = b.title || b.name;
+      a.title = `open “${b.title || b.name}” in the reader`;
+      a.href = `${s.kiwix_url}/viewer#${b.name}`;
+      a.target = "_blank";
+      a.rel = "noopener";
+      list.append(a);
+    }
+    if (books.length > 12) {
+      const more = document.createElement("div");
+      more.className = "kx-book dim";
+      more.textContent = `+ ${books.length - 12} more in the reader`;
+      list.append(more);
+    }
+    $("kx-open").hidden = !s.kiwix_online;
+    $("kx-open").onclick = () => window.open(s.kiwix_url, "_blank");
+
+    // NETWORK service table
+    $("svc-ui-addr").textContent = location.host;
+    setService("svc-llm", "svc-llm-addr", s.online,
+      s.online ? `${s.backend_kind} · ${(s.backend_url || "").replace(/^https?:\/\//, "")}` : "down");
+    setService("svc-kiwix", "svc-kiwix-addr", s.kiwix_online,
+      s.kiwix_online ? `${(s.kiwix_url || "").replace(/^https?:\/\//, "")} · ${books.length} books` : "down");
     els.offlineNote.hidden = s.online;
     $("ws-path").textContent = s.workspace || "—";
     $("set-workspace").textContent = s.workspace || "";
@@ -306,6 +355,11 @@ async function refreshStatus() {
     els.statusDot.className = "status-dot off";
     els.statusText.textContent = "ERR";
   }
+}
+
+function setService(dotId, addrId, up, text) {
+  $(dotId).className = "svc-dot " + (up ? "on" : "off");
+  $(addrId).textContent = text;
 }
 
 function updateModelReadouts() {
@@ -518,6 +572,11 @@ async function openSettings() {
   $("set-model").value = cfg.default_model ?? "";
   $("set-temp").value = cfg.temperature ?? 0.7;
   $("set-system").value = cfg.system_prompt ?? "";
+  $("set-steps").value = cfg.max_tool_steps ?? 8;
+  $("set-timeout").value = cfg.command_timeout ?? 120;
+  $("set-kiwix").value = cfg.kiwix_url ?? "auto";
+  $("set-info").textContent =
+    `data: ${cfg.data_dir}   ui port: ${cfg.port}   host: ${cfg.host}`;
   $("settings-modal").hidden = false;
 }
 
@@ -530,6 +589,9 @@ async function saveSettings() {
       default_model: $("set-model").value.trim(),
       temperature: parseFloat($("set-temp").value) || 0.7,
       system_prompt: $("set-system").value,
+      max_tool_steps: parseInt($("set-steps").value, 10) || 8,
+      command_timeout: parseInt($("set-timeout").value, 10) || 120,
+      kiwix_url: $("set-kiwix").value.trim() || "auto",
     }),
   });
   $("settings-modal").hidden = true;
@@ -861,6 +923,6 @@ refreshSystem();
 setTimeout(refreshSystem, 1200); // second sample so CPU% has a delta
 refreshConversations();
 setInterval(refreshStatus, 20000);
-setInterval(refreshSystem, 5000);
+sysTimer = setInterval(refreshSystem, 5000);
 logActivity("xDrive terminal ready");
 els.input.focus();

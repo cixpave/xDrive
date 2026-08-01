@@ -33,6 +33,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 APP_NAME = "xDrive"
+SERVER_STARTED = time.time()
 ROOT = Path(__file__).resolve().parent.parent
 WEB_DIR = ROOT / "web"
 CONFIG_PATH = ROOT / "config.json"
@@ -216,15 +217,44 @@ def probe_backend(url):
     return None
 
 
+# Probe results are cached briefly: the UI polls status/downloads every few
+# seconds, and probing a *down* runtime costs two 2-second timeouts — without
+# a cache every request in between stalls behind that.
+_probe_lock = threading.Lock()
+_probe_cache = {}
+
+
+def _cached_probe(key, ttl, fn):
+    now = time.time()
+    with _probe_lock:
+        hit = _probe_cache.get(key)
+        if hit and hit[0] > now:
+            return hit[1]
+    value = fn()
+    with _probe_lock:
+        _probe_cache[key] = (now + ttl, value)
+    return value
+
+
+def clear_probe_cache():
+    with _probe_lock:
+        _probe_cache.clear()
+
+
 def resolve_backend(cfg):
     """Return (url, kind, models) for the active backend, or (None, None, [])."""
     configured = cfg.get("backend_url", "auto")
-    candidates = KNOWN_BACKENDS if configured in ("", "auto") else [configured.rstrip("/")]
-    for url in candidates:
-        found = probe_backend(url)
-        if found:
-            return url, found[0], found[1]
-    return None, None, []
+
+    def _probe():
+        candidates = (KNOWN_BACKENDS if configured in ("", "auto")
+                      else [configured.rstrip("/")])
+        for url in candidates:
+            found = probe_backend(url)
+            if found:
+                return url, found[0], found[1]
+        return None, None, []
+
+    return _cached_probe(("backend", configured), 3.0, _probe)
 
 
 def stream_chat(backend_url, model, messages, temperature):
@@ -291,12 +321,17 @@ def kiwix_books(url):
 def resolve_kiwix(cfg):
     """Return (url, books) for the knowledge base, or (None, [])."""
     configured = cfg.get("kiwix_url", "auto")
-    candidates = KNOWN_KIWIX if configured in ("", "auto") else [configured.rstrip("/")]
-    for url in candidates:
-        books = kiwix_books(url)
-        if books is not None:
-            return url, books
-    return None, []
+
+    def _probe():
+        candidates = (KNOWN_KIWIX if configured in ("", "auto")
+                      else [configured.rstrip("/")])
+        for url in candidates:
+            books = kiwix_books(url)
+            if books is not None:
+                return url, books
+        return None, []
+
+    return _cached_probe(("kiwix", configured), 3.0, _probe)
 
 
 class _SearchResultParser(HTMLParser):
@@ -551,6 +586,7 @@ def download_zim_job(job_id, files):
     """Download ZIM file(s) to library/ with resume support."""
     lib = ROOT / "library"
     lib.mkdir(exist_ok=True)
+    downloaded_any = False
     try:
         for idx, rel in enumerate(files, 1):
             if zim_stem_installed(lib, rel):
@@ -591,10 +627,12 @@ def download_zim_job(job_id, files):
                            detail="connection dropped — GET again to resume")
                 return
             part.replace(dest)
-        mounted = restart_kiwix()
+            downloaded_any = True
+        # only bounce kiwix-serve when something new actually arrived
+        mounted = restart_kiwix() if downloaded_any else False
         job_update(job_id, status="done",
                    detail="installed — knowledge base mounted" if mounted
-                   else "installed — restart xDrive to mount it")
+                   else "installed")
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
         job_update(job_id, status="error", detail=f"download failed: {exc}")
 
@@ -765,6 +803,7 @@ def restart_kiwix():
         subprocess.Popen([binary, "--port", "8181", *map(str, zims)],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                          start_new_session=True)
+        clear_probe_cache()
         return True
     except OSError:
         return False
@@ -918,6 +957,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "close")
         self.end_headers()
+        # no Content-Length on this response — tell the base class not to
+        # reuse the connection or the next request would hang forever
+        self.close_connection = True
 
     def sse(self, obj):
         self.wfile.write(f"data: {json.dumps(obj, ensure_ascii=False)}\n\n".encode("utf-8"))
@@ -1010,7 +1052,7 @@ class Handler(BaseHTTPRequestHandler):
             "workspace": str(workspace_dir(cfg)),
             "kiwix_url": kx_url,
             "kiwix_online": kx_url is not None,
-            "kiwix_books": [b["title"] for b in kx_books],
+            "kiwix_books": kx_books,  # [{name, title}] — name keys the viewer URL
         })
 
     def handle_system(self):
@@ -1022,6 +1064,7 @@ class Handler(BaseHTTPRequestHandler):
                     "percent": cpu_percent()},
             "mem": {"total": mem_total, "used": mem_used},
             "gpu": gpu_info(),
+            "uptime_s": int(time.time() - SERVER_STARTED),
         })
 
     def handle_downloads(self):
@@ -1073,6 +1116,7 @@ class Handler(BaseHTTPRequestHandler):
 
         def _re_exec():
             time.sleep(0.6)
+            clear_probe_cache()
             os.execv(sys.executable,
                      [sys.executable, str(Path(__file__).resolve())])
 
