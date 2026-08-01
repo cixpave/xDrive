@@ -153,11 +153,17 @@
           </div>
           <div class="store-section">
             <div class="store-head">// MODELS <span class="store-sub">pulled via ollama · stored on this drive</span></div>
-            <div class="store-list" id="store-models"><div class="store-empty">loading…</div></div>
+            <div class="store-table">
+              <div class="store-hrow"><span>NAME</span><span>CLASS</span><span>INFO</span><span>SIZE</span><span class="th-action">ACTION</span></div>
+              <div id="store-models"><div class="store-empty">loading…</div></div>
+            </div>
           </div>
           <div class="store-section">
             <div class="store-head">// KNOWLEDGE <span class="store-sub">ZIM archives · saved to library/</span></div>
-            <div class="store-list" id="store-zims"><div class="store-empty">loading…</div></div>
+            <div class="store-table">
+              <div class="store-hrow"><span>NAME</span><span>CLASS</span><span>INFO</span><span>SIZE</span><span class="th-action">ACTION</span></div>
+              <div id="store-zims"><div class="store-empty">loading…</div></div>
+            </div>
           </div>
           <div class="store-note">downloads need internet once — everything runs offline afterwards. interrupted downloads resume when you hit GET again.</div>
         </section>
@@ -174,9 +180,17 @@
         <section class="panel">
           <div class="panel-head">NETWORK</div>
           <div class="panel-body net-body">
-            <div class="net-banner" id="net-banner">
-              <span class="net-shield">⛨</span>
-              <span class="net-banner-text">AIR·GAPPED<small>all traffic stays on this machine</small></span>
+            <div class="net-speeds">
+              <div class="net-speed">
+                <span class="net-arrow">▼</span>
+                <b id="net-down">—</b>
+                <small>DOWN</small>
+              </div>
+              <div class="net-speed">
+                <span class="net-arrow up">▲</span>
+                <b id="net-up">—</b>
+                <small>UP</small>
+              </div>
             </div>
             <div class="svc">
               <span class="svc-dot on" id="svc-ui"></span>
@@ -193,7 +207,7 @@
               <span class="svc-name">WIKI</span>
               <span class="svc-addr" id="svc-kiwix-addr">probing…</span>
             </div>
-            <div class="kv"><span>EXPOSED</span><b>NOTHING</b></div>
+            <div class="kv"><span>BIND</span><b>127.0.0.1 · local only</b></div>
           </div>
         </section>
 
@@ -283,6 +297,13 @@
         <div class="field">
           <span>PATHS &amp; PORTS <small>read-only · edit config.json to change</small></span>
           <code id="set-info" class="ws-path"></code>
+        </div>
+        <div class="field danger-zone">
+          <span>DANGER ZONE <small>models &amp; downloaded books are never touched</small></span>
+          <div class="danger-btns">
+            <button class="term-btn danger" id="btn-wipe-chats">WIPE CHATS</button>
+            <button class="term-btn danger" id="btn-wipe-all">FACTORY RESET</button>
+          </div>
         </div>
       </div>
       <div class="modal-foot">

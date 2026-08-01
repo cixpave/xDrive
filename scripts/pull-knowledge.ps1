@@ -1,7 +1,7 @@
 # Download the offline knowledge base to this drive (requires internet ONCE).
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\pull-knowledge.ps1
-#       core set (~103 GB: full Wikipedia, Arch Wiki, docs for ~17 languages)
+#       core set (~103 GB: full Wikipedia, Arch Wiki, docs for 40 languages)
 #   powershell -ExecutionPolicy Bypass -File scripts\pull-knowledge.ps1 -Full
 #       adds Stack Overflow, Wiktionary, Wikibooks (~+180 GB)
 #
@@ -35,7 +35,30 @@ $Core = @(
     "devdocs/devdocs_en_docker.zim",
     "devdocs/devdocs_en_postgresql.zim",
     "devdocs/devdocs_en_react.zim",
-    "devdocs/devdocs_en_rails.zim"
+    "devdocs/devdocs_en_rails.zim",
+    "devdocs/devdocs_en_lua.zim",
+    "devdocs/devdocs_en_php.zim",
+    "devdocs/devdocs_en_ruby.zim",
+    "devdocs/devdocs_en_kotlin.zim",
+    "devdocs/devdocs_en_dart.zim",
+    "devdocs/devdocs_en_elixir.zim",
+    "devdocs/devdocs_en_haskell.zim",
+    "devdocs/devdocs_en_perl.zim",
+    "devdocs/devdocs_en_r.zim",
+    "devdocs/devdocs_en_scala.zim",
+    "devdocs/devdocs_en_nginx.zim",
+    "devdocs/devdocs_en_sqlite.zim",
+    "devdocs/devdocs_en_redis.zim",
+    "devdocs/devdocs_en_kubernetes.zim",
+    "devdocs/devdocs_en_cmake.zim",
+    "devdocs/devdocs_en_vue.zim",
+    "devdocs/devdocs_en_django.zim",
+    "devdocs/devdocs_en_flask.zim",
+    "devdocs/devdocs_en_numpy.zim",
+    "devdocs/devdocs_en_pandas.zim",
+    "devdocs/devdocs_en_godot.zim",
+    "devdocs/devdocs_en_love.zim",
+    "devdocs/devdocs_en_matplotlib.zim"
 )
 
 $Extra = @(

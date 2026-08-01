@@ -21,8 +21,8 @@
 
 xDrive is a self-contained AI assistant that lives entirely on one drive:
 the app, the models, chat history, an agent workspace, and an offline
-knowledge base with **all of English Wikipedia** and **docs for 17
-programming languages**. Plug the drive in, launch, and everything works —
+knowledge base with **all of English Wikipedia** and **docs for 40
+programming languages & tools**. Plug the drive in, launch, and everything works —
 no internet, no accounts, no cloud.
 
 | | |
@@ -162,11 +162,18 @@ future context so long sessions stay fast.
 
 **KNOWLEDGE panel** — shows every mounted book; click one to open it in the
 Kiwix reader, or hit OPEN READER for the whole library. **NETWORK panel** —
-live status of all three local services (UI, LLM, wiki server).
+live download/upload speeds plus status of all three local services (UI,
+LLM, wiki server).
 
 **INVERT** — flips the black terminal to a white theme. **CONFIG** — backend
 URL, default model, temperature, system prompt, agent limits (tool steps,
-command timeout), and the knowledge base URL.
+command timeout), and the knowledge base URL. The DANGER ZONE at the bottom
+can **WIPE CHATS** or **FACTORY RESET** (chats + workspace + settings —
+models and downloaded books always survive).
+
+From a terminal, `./scripts/reset.sh` does the same and stops any running
+processes first: add `--books` to also drop downloaded ZIMs, `--models` for
+model weights, or `--everything` to get back to a fresh clone.
 
 ---
 
@@ -211,7 +218,7 @@ then double-click **`start.bat`**.
 | Launcher entry missing after moving the drive | `./scripts/install-desktop.sh` (it stores the absolute path) |
 | Opens in a browser instead of its own window | `sudo pacman -S --needed webkit2gtk-4.1 python-gobject gtk3`, then relaunch |
 | APPLY UPDATE fails | local changes on the drive: `git stash && git pull --ff-only origin main` inside the repo |
-| Updated (git pull / APPLY UPDATE) but nothing changed | the old server process is still running — hit **RESTART** (bottom-left, or offered in GET MORE), or `pkill -f xdrive/server.py` and relaunch |
+| Updated but nothing changed / repeated `/api/system` 404s in the console | an old server process is still running. Relaunching from the app launcher now detects and replaces it automatically; otherwise hit **RESTART** (bottom-left) or `pkill -f xdrive/server.py` |
 | Downloaded knowledge doesn't show in KNOWLEDGE panel | new ZIMs auto-mount after download; if BOOKS stays 0, hit **RESTART** |
 
 ## Project layout

@@ -466,39 +466,63 @@ GH_API = os.environ.get("XDRIVE_GH_API", "https://api.github.com")
 ZIM_BASE = os.environ.get("XDRIVE_ZIM_BASE", "https://download.kiwix.org/zim/")
 
 MODEL_CATALOG = [
-    {"id": "qwen2.5:3b",        "size": "1.9 GB", "cat": "general",   "desc": "instant answers on any hardware"},
-    {"id": "qwen2.5:14b",       "size": "9.0 GB", "cat": "general",   "desc": "everyday chat, writing, Q&A"},
-    {"id": "llama3.3:70b",      "size": "43 GB",  "cat": "general",   "desc": "best general model (48 GB+ RAM)"},
-    {"id": "qwen2.5-coder:7b",  "size": "4.7 GB", "cat": "coding",    "desc": "fast coding assistant"},
-    {"id": "qwen2.5-coder:14b", "size": "9.0 GB", "cat": "coding",    "desc": "daily-driver coding, 40+ languages"},
-    {"id": "qwen2.5-coder:32b", "size": "20 GB",  "cat": "coding",    "desc": "heavy coding (24 GB+ RAM)"},
-    {"id": "deepseek-r1:8b",    "size": "5.2 GB", "cat": "reasoning", "desc": "compact step-by-step reasoning"},
-    {"id": "deepseek-r1:14b",   "size": "9.0 GB", "cat": "reasoning", "desc": "step-by-step reasoning"},
-    {"id": "deepseek-r1:32b",   "size": "20 GB",  "cat": "reasoning", "desc": "heavy reasoning (24 GB+ RAM)"},
-    {"id": "llava:13b",         "size": "8.0 GB", "cat": "vision",    "desc": "describe screenshots and images"},
+    {"id": "qwen2.5:3b",           "size": "1.9 GB", "cat": "general",   "desc": "instant answers on any hardware"},
+    {"id": "llama3.2:3b",          "size": "2.0 GB", "cat": "general",   "desc": "meta's small fast generalist"},
+    {"id": "mistral:7b",           "size": "4.1 GB", "cat": "general",   "desc": "classic all-rounder"},
+    {"id": "gemma2:9b",            "size": "5.4 GB", "cat": "general",   "desc": "google's mid-size generalist"},
+    {"id": "qwen2.5:14b",          "size": "9.0 GB", "cat": "general",   "desc": "everyday chat, writing, Q&A"},
+    {"id": "qwen2.5:32b",          "size": "20 GB",  "cat": "general",   "desc": "strong generalist (24 GB+ RAM)"},
+    {"id": "llama3.3:70b",         "size": "43 GB",  "cat": "general",   "desc": "best general model (48 GB+ RAM)"},
+    {"id": "qwen2.5-coder:7b",     "size": "4.7 GB", "cat": "coding",    "desc": "fast coding assistant"},
+    {"id": "codellama:13b",        "size": "7.4 GB", "cat": "coding",    "desc": "meta's code specialist"},
+    {"id": "deepseek-coder-v2:16b","size": "8.9 GB", "cat": "coding",    "desc": "MoE coder — fast for its strength"},
+    {"id": "qwen2.5-coder:14b",    "size": "9.0 GB", "cat": "coding",    "desc": "daily-driver coding, 40+ languages"},
+    {"id": "qwen2.5-coder:32b",    "size": "20 GB",  "cat": "coding",    "desc": "heavy coding (24 GB+ RAM)"},
+    {"id": "deepseek-r1:8b",       "size": "5.2 GB", "cat": "reasoning", "desc": "compact step-by-step reasoning"},
+    {"id": "phi4:14b",             "size": "9.1 GB", "cat": "reasoning", "desc": "microsoft's math/logic specialist"},
+    {"id": "deepseek-r1:14b",      "size": "9.0 GB", "cat": "reasoning", "desc": "step-by-step reasoning"},
+    {"id": "deepseek-r1:32b",      "size": "20 GB",  "cat": "reasoning", "desc": "heavy reasoning (24 GB+ RAM)"},
+    {"id": "llava:7b",             "size": "4.7 GB", "cat": "vision",    "desc": "lightweight image understanding"},
+    {"id": "llava:13b",            "size": "8.0 GB", "cat": "vision",    "desc": "describe screenshots and images"},
 ]
 
+# every name verified against download.kiwix.org/zim/devdocs/
 _DEVDOCS = ["python", "javascript", "typescript", "node", "html", "css", "c",
             "cpp", "rust", "go", "openjdk", "bash", "git", "docker",
-            "postgresql", "react", "rails"]
+            "postgresql", "react", "rails", "lua", "php", "ruby", "kotlin",
+            "dart", "elixir", "haskell", "perl", "r", "scala", "nginx",
+            "sqlite", "redis", "kubernetes", "cmake", "vue", "django",
+            "flask", "numpy", "pandas", "godot", "love", "matplotlib"]
 
 ZIM_CATALOG = [
     {"id": "wikipedia-full",   "title": "Wikipedia — full English, with images",
-     "size": "~102 GB", "files": ["wikipedia/wikipedia_en_all_maxi.zim"]},
+     "size": "~102 GB", "cat": "wiki", "files": ["wikipedia/wikipedia_en_all_maxi.zim"]},
     {"id": "wikipedia-nopic",  "title": "Wikipedia — full English, text only",
-     "size": "~54 GB",  "files": ["wikipedia/wikipedia_en_all_nopic.zim"]},
+     "size": "~54 GB",  "cat": "wiki", "files": ["wikipedia/wikipedia_en_all_nopic.zim"]},
     {"id": "wikipedia-simple", "title": "Simple English Wikipedia",
-     "size": "~2 GB",   "files": ["wikipedia/wikipedia_en_simple_all_maxi.zim"]},
+     "size": "~2 GB",   "cat": "wiki", "files": ["wikipedia/wikipedia_en_simple_all_maxi.zim"]},
     {"id": "archwiki",         "title": "Arch Wiki",
-     "size": "~30 MB",  "files": ["other/archlinux_en_all_maxi.zim"]},
-    {"id": "devdocs-pack",     "title": f"DevDocs pack — {len(_DEVDOCS)} languages/tools",
-     "size": "~1 GB",   "files": [f"devdocs/devdocs_en_{d}.zim" for d in _DEVDOCS]},
+     "size": "~30 MB",  "cat": "linux", "files": ["other/archlinux_en_all_maxi.zim"]},
+    {"id": "devdocs-pack",     "title": f"DevDocs pack — {len(_DEVDOCS)} languages/tools incl. Lua",
+     "size": "~2 GB",   "cat": "code", "files": [f"devdocs/devdocs_en_{d}.zim" for d in _DEVDOCS]},
     {"id": "stackoverflow",    "title": "Stack Overflow — every question & answer",
-     "size": "~75 GB",  "files": ["stack_exchange/stackoverflow.com_en_all.zim"]},
+     "size": "~75 GB",  "cat": "code", "files": ["stack_exchange/stackoverflow.com_en_all.zim"]},
+    {"id": "unix-se",          "title": "Unix & Linux StackExchange",
+     "size": "~4 GB",   "cat": "linux", "files": ["stack_exchange/unix.stackexchange.com_en_all.zim"]},
+    {"id": "askubuntu",        "title": "Ask Ubuntu — Q&A",
+     "size": "~5 GB",   "cat": "linux", "files": ["stack_exchange/askubuntu.com_en_all.zim"]},
+    {"id": "superuser",        "title": "Super User — power-user Q&A",
+     "size": "~5 GB",   "cat": "misc", "files": ["stack_exchange/superuser.com_en_all.zim"]},
     {"id": "wiktionary",       "title": "Wiktionary — English dictionary",
-     "size": "~7 GB",   "files": ["wiktionary/wiktionary_en_all_nopic.zim"]},
+     "size": "~7 GB",   "cat": "wiki", "files": ["wiktionary/wiktionary_en_all_nopic.zim"]},
     {"id": "wikibooks",        "title": "Wikibooks — textbooks & manuals",
-     "size": "~4 GB",   "files": ["wikibooks/wikibooks_en_all_maxi.zim"]},
+     "size": "~4 GB",   "cat": "wiki", "files": ["wikibooks/wikibooks_en_all_maxi.zim"]},
+    {"id": "wikiversity",      "title": "Wikiversity — courses & learning",
+     "size": "~3 GB",   "cat": "wiki", "files": ["wikiversity/wikiversity_en_all_maxi.zim"]},
+    {"id": "ifixit",           "title": "iFixit — repair guides for everything",
+     "size": "~2 GB",   "cat": "misc", "files": ["ifixit/ifixit_en_all.zim"]},
+    {"id": "gutenberg",        "title": "Project Gutenberg — 60k+ books",
+     "size": "~65 GB",  "cat": "misc", "files": ["gutenberg/gutenberg_en_all.zim"]},
 ]
 
 _jobs_lock = threading.Lock()
@@ -713,6 +737,33 @@ def mem_info():
     return None, None
 
 
+_net_sample = {}
+
+
+def net_rate():
+    """Return {rx_bps, tx_bps} across all non-loopback interfaces (Linux)."""
+    try:
+        rx = tx = 0
+        with open("/proc/net/dev") as f:
+            for line in f.readlines()[2:]:
+                iface, _, rest = line.partition(":")
+                if iface.strip() == "lo":
+                    continue
+                fields = rest.split()
+                rx += int(fields[0])
+                tx += int(fields[8])
+        now = time.time()
+        prev = _net_sample.get("v")
+        _net_sample["v"] = (now, rx, tx)
+        if prev and now > prev[0]:
+            dt = now - prev[0]
+            return {"rx_bps": max(0, (rx - prev[1]) / dt),
+                    "tx_bps": max(0, (tx - prev[2]) / dt)}
+    except (OSError, ValueError, IndexError):
+        pass
+    return None
+
+
 def gpu_info():
     """Return {name, util, vram_used, vram_total} or None."""
     if shutil.which("nvidia-smi"):
@@ -794,7 +845,8 @@ def restart_kiwix():
             subprocess.run(["taskkill", "/F", "/IM", "kiwix-serve.exe"],
                            capture_output=True, timeout=10)
         else:
-            subprocess.run(["pkill", "-f", "kiwix-serve"],
+            # bracket stops the pattern from matching pkill's own argv
+            subprocess.run(["pkill", "-f", "[k]iwix-serve"],
                            capture_output=True, timeout=10)
         time.sleep(0.5)
     except (OSError, subprocess.TimeoutExpired):
@@ -1005,6 +1057,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.handle_update_apply()
             if path == "/api/restart":
                 return self.handle_restart()
+            if path == "/api/wipe":
+                return self.handle_wipe()
             if path == "/api/stop":
                 return self.send_json({"ok": True})
         except (json.JSONDecodeError, KeyError, ValueError) as exc:
@@ -1053,6 +1107,8 @@ class Handler(BaseHTTPRequestHandler):
             "kiwix_url": kx_url,
             "kiwix_online": kx_url is not None,
             "kiwix_books": kx_books,  # [{name, title}] — name keys the viewer URL
+            # lets the launcher detect a stale process without touching GitHub
+            "running_commit": (RUNNING_COMMIT or "")[:12],
         })
 
     def handle_system(self):
@@ -1064,6 +1120,7 @@ class Handler(BaseHTTPRequestHandler):
                     "percent": cpu_percent()},
             "mem": {"total": mem_total, "used": mem_used},
             "gpu": gpu_info(),
+            "net": net_rate(),
             "uptime_s": int(time.time() - SERVER_STARTED),
         })
 
@@ -1074,6 +1131,7 @@ class Handler(BaseHTTPRequestHandler):
         lib = ROOT / "library"
         models = [{**m, "installed": m["id"] in installed} for m in MODEL_CATALOG]
         zims = [{"id": z["id"], "title": z["title"], "size": z["size"],
+                 "cat": z.get("cat", ""),
                  "installed": all(zim_stem_installed(lib, f)
                                   for f in z["files"])}
                 for z in ZIM_CATALOG]
@@ -1109,6 +1167,33 @@ class Handler(BaseHTTPRequestHandler):
         job_id = body.get("job", "")
         job_update(job_id, cancel=True)
         self.send_json({"ok": True})
+
+    def handle_wipe(self):
+        """Erase runtime data. scope=chats: conversations only; scope=all:
+        conversations + workspace + config, then restart fresh. Models and
+        the knowledge library are never touched from here."""
+        body = self.read_json()
+        scope = body.get("scope")
+        cfg = load_config()
+        if scope == "chats":
+            shutil.rmtree(conversations_dir(cfg), ignore_errors=True)
+            conversations_dir(cfg)
+            return self.send_json({"ok": True, "wiped": "conversations"})
+        if scope == "all":
+            shutil.rmtree(data_dir(cfg), ignore_errors=True)
+            CONFIG_PATH.unlink(missing_ok=True)
+            self.send_json({"ok": True, "wiped": "data + config",
+                            "note": "restarting fresh"})
+
+            def _re_exec():
+                time.sleep(0.6)
+                clear_probe_cache()
+                os.execv(sys.executable,
+                         [sys.executable, str(Path(__file__).resolve())])
+
+            threading.Thread(target=_re_exec, daemon=True).start()
+            return
+        return self.send_json({"error": "scope must be 'chats' or 'all'"}, 400)
 
     def handle_restart(self):
         """Re-exec the server so freshly pulled code (or new config) loads."""
