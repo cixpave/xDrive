@@ -59,13 +59,9 @@ jobs:
           if (-not (Test-Path dist/xDrive/xDrive.exe)) { throw "xDrive.exe missing" }
           if (-not (Test-Path dist/xDrive/_internal/web/setup.html)) { throw "setup page missing" }
 
-      - name: Package download
-        shell: pwsh
-        run: Compress-Archive -Path dist/xDrive -DestinationPath xDrive-Windows-Portable.zip
-
       - uses: actions/upload-artifact@v4
         with:
           name: xDrive-Windows-Portable
-          path: xDrive-Windows-Portable.zip
+          path: dist/xDrive/
           if-no-files-found: error
           retention-days: 30
