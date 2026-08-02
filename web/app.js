@@ -346,6 +346,9 @@ async function refreshStatus() {
       s.kiwix_online ? `${(s.kiwix_url || "").replace(/^https?:\/\//, "")} · ${books.length} books` : "down");
     els.offlineNote.hidden = s.online;
     $("ws-path").textContent = s.workspace || "—";
+    $("agent-tools").textContent = s.command_enabled
+      ? "read · write · ls · exec"
+      : "read · write · ls · drive-only";
     $("set-workspace").textContent = s.workspace || "";
     $("bar-port").textContent = location.host;
 

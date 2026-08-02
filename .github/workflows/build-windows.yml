@@ -1,0 +1,72 @@
+name: Build Windows portable app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "xdrive/**"
+      - "web/**"
+      - "assets/**"
+      - ".github/workflows/build-windows.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-portable:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install build tool
+        run: python -m pip install "pyinstaller>=6.0,<7"
+
+      - name: Run portable-app tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Build xDrive.exe
+        shell: pwsh
+        run: |
+          pyinstaller `
+            --clean `
+            --noconfirm `
+            --windowed `
+            --onedir `
+            --name xDrive `
+            --contents-directory _internal `
+            --paths . `
+            --add-data "web;web" `
+            --add-data "assets;assets" `
+            xdrive/desktop.py
+
+          New-Item -ItemType Directory -Force dist/xDrive/data | Out-Null
+          New-Item -ItemType Directory -Force dist/xDrive/models | Out-Null
+          New-Item -ItemType Directory -Force dist/xDrive/library | Out-Null
+          New-Item -ItemType Directory -Force dist/xDrive/tools | Out-Null
+          Copy-Item README.md dist/xDrive/README.md
+          Copy-Item docs/WINDOWS-PORTABLE.md dist/xDrive/START-HERE.txt
+
+      - name: Verify portable layout
+        shell: pwsh
+        run: |
+          if (-not (Test-Path dist/xDrive/xDrive.exe)) { throw "xDrive.exe missing" }
+          if (-not (Test-Path dist/xDrive/_internal/web/setup.html)) { throw "setup page missing" }
+
+      - name: Package download
+        shell: pwsh
+        run: Compress-Archive -Path dist/xDrive -DestinationPath xDrive-Windows-Portable.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xDrive-Windows-Portable
+          path: xDrive-Windows-Portable.zip
+          if-no-files-found: error
+          retention-days: 30

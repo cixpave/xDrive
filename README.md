@@ -177,17 +177,30 @@ model weights, or `--everything` to get back to a fresh clone.
 
 ---
 
-## Windows
+## Windows 11 — portable xDrive.exe
 
-Same app, same drive:
+Windows users do not need Python, PowerShell scripts, Git, or a system-wide
+Ollama installation.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1     # one-time
-powershell -ExecutionPolicy Bypass -File scripts\pull-models.ps1       # one-time
-powershell -ExecutionPolicy Bypass -File scripts\pull-knowledge.ps1    # one-time
-```
+1. Download the **xDrive-Windows-Portable** artifact from the latest GitHub
+   Actions build and extract the complete `xDrive` folder to your hard drive.
+2. Double-click **`xDrive.exe`**.
+3. The first-run landing page verifies the drive, downloads portable Ollama,
+   and helps you choose a starter model.
 
-then double-click **`start.bat`**.
+The executable always resolves storage from its own location. Conversations,
+agent files, models, offline books, Edge profile/cache, and app temporary files
+stay within the portable folder. Move the complete folder to a different drive
+letter and launch it again—no path repair or reinstallation is needed.
+
+The download is intentionally a portable folder containing `xDrive.exe` and
+an adjacent private runtime, instead of a PyInstaller one-file build. A
+one-file build extracts dependencies into the Windows temp directory, which
+would violate xDrive's drive-only storage rule. See
+[docs/WINDOWS-PORTABLE.md](docs/WINDOWS-PORTABLE.md) for the exact layout.
+
+`start.bat` and `scripts/setup-windows.ps1` remain available for developers
+running directly from a source checkout; end users should use `xDrive.exe`.
 
 ---
 
@@ -226,7 +239,11 @@ then double-click **`start.bat`**.
 ```
 xdrive/server.py   the entire backend — one file, Python stdlib only
 xdrive/window.py   native GTK/WebKit app window
+xdrive/desktop.py  packaged Windows desktop entry point
+xdrive/paths.py    drive-relative storage and portable environment
+xdrive/portable_runtime.py  portable Ollama + Edge launcher
 web/               terminal UI (vanilla JS + bundled marked/highlight)
+.github/workflows/build-windows.yml  produces xDrive-Windows-Portable.zip
 scripts/           setup, model/knowledge downloads, desktop-entry install
 assets/            app icon
 docs/MODELS.md     the 5TB drive plan
