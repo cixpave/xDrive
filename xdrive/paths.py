@@ -53,6 +53,13 @@ def prepare_portable_environment() -> None:
     for path in (DATA_DIR, MODELS_DIR, LIBRARY_DIR, TOOLS_DIR, RUNTIME_DIR):
         path.mkdir(parents=True, exist_ok=True)
 
+    # Older launchers could be terminated during the first writable-drive
+    # probe, leaving this harmless marker behind. Remove it on the next start.
+    try:
+        (ROOT / ".xdrive-write-test").unlink(missing_ok=True)
+    except OSError:
+        pass
+
     temp = RUNTIME_DIR / "temp"
     profile = RUNTIME_DIR / "profile"
     appdata = profile / "AppData" / "Roaming"

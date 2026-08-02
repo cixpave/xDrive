@@ -255,18 +255,18 @@ def list_conversations(cfg):
 # LLM backend (Ollama / llama.cpp — both speak the OpenAI chat API)
 # --------------------------------------------------------------------------
 
-def probe_backend(url):
+def probe_backend(url, timeout=2):
     """Return (kind, models) if an LLM runtime answers at `url`, else None."""
     # Ollama native endpoint gives us model names with sizes.
     try:
-        with urllib.request.urlopen(f"{url}/api/tags", timeout=2) as resp:
+        with urllib.request.urlopen(f"{url}/api/tags", timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             models = [m["name"] for m in data.get("models", [])]
             return ("ollama", models)
     except (urllib.error.URLError, json.JSONDecodeError, OSError, TimeoutError):
         pass
     try:
-        with urllib.request.urlopen(f"{url}/v1/models", timeout=2) as resp:
+        with urllib.request.urlopen(f"{url}/v1/models", timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             models = [m.get("id", "default") for m in data.get("data", [])]
             return ("openai", models)
@@ -1201,7 +1201,11 @@ class Handler(BaseHTTPRequestHandler):
             writable = True
         except OSError:
             pass
-        backend_url, backend_kind, models = resolve_backend(cfg)
+        portable_installed = portable_ollama_binary().is_file()
+        found = (probe_backend(PORTABLE_OLLAMA_URL, timeout=0.35)
+                 if portable_installed else None)
+        backend_url = PORTABLE_OLLAMA_URL if found else None
+        backend_kind, models = found if found else (None, [])
         with _jobs_lock:
             jobs = {k: {kk: vv for kk, vv in v.items() if kk != "cancel"}
                     for k, v in JOBS.items() if k.startswith("setup:")
@@ -1212,7 +1216,7 @@ class Handler(BaseHTTPRequestHandler):
             "drive_root": str(ROOT),
             "drive_writable": writable,
             "drive_free": du.free,
-            "ollama_installed": portable_ollama_binary().is_file(),
+            "ollama_installed": portable_installed,
             "ollama_online": backend_url is not None,
             "backend_kind": backend_kind,
             "models": models,

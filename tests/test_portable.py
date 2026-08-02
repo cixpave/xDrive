@@ -52,6 +52,11 @@ class SetupRoutingTests(unittest.TestCase):
     def test_completed_setup_serves_terminal(self):
         self.assertIn("Offline AI Terminal", self._get_root(True))
 
+    def test_launcher_readiness_page_does_not_probe_backend(self):
+        with mock.patch.object(server, "resolve_backend",
+                               side_effect=AssertionError("backend probe")):
+            self.assertIn("PORTABLE WINDOWS 11 SETUP", self._get_root(False))
+
 
 if __name__ == "__main__":
     unittest.main()

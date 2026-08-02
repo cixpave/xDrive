@@ -30,7 +30,9 @@ def wait_for_server(url: str, timeout: float = 20.0) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
-            with urllib.request.urlopen(f"{url}/api/setup", timeout=1) as response:
+            # Readiness must not call /api/setup: that endpoint probes the LLM
+            # runtime and is intentionally slower when no runtime exists yet.
+            with urllib.request.urlopen(f"{url}/setup.html", timeout=1) as response:
                 return response.status == 200
         except (urllib.error.URLError, OSError, TimeoutError):
             time.sleep(0.2)
