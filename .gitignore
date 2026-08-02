@@ -9,3 +9,6 @@ mirrors/
 __pycache__/
 *.pyc
 nohup.out
+build/
+dist/
+*.spec

@@ -28,15 +28,48 @@ import urllib.parse
 import urllib.request
 import uuid
 import xml.etree.ElementTree as ET
+import zipfile
 from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+try:
+    from xdrive.paths import (
+        CONFIG_PATH,
+        LIBRARY_DIR,
+        ROOT,
+        TOOLS_DIR,
+        WEB_DIR,
+        prepare_portable_environment,
+    )
+    from xdrive.portable_runtime import (
+        install_portable_ollama,
+        install_portable_kiwix,
+        ollama_binary,
+        PORTABLE_OLLAMA_URL,
+        portable_ollama_binary,
+        start_ollama,
+    )
+except ModuleNotFoundError:  # supports ``python xdrive/server.py``
+    from paths import (  # type: ignore
+        CONFIG_PATH,
+        LIBRARY_DIR,
+        ROOT,
+        TOOLS_DIR,
+        WEB_DIR,
+        prepare_portable_environment,
+    )
+    from portable_runtime import (  # type: ignore
+        install_portable_ollama,
+        install_portable_kiwix,
+        ollama_binary,
+        PORTABLE_OLLAMA_URL,
+        portable_ollama_binary,
+        start_ollama,
+    )
+
 APP_NAME = "xDrive"
 SERVER_STARTED = time.time()
-ROOT = Path(__file__).resolve().parent.parent
-WEB_DIR = ROOT / "web"
-CONFIG_PATH = ROOT / "config.json"
 
 DEFAULT_CONFIG = {
     # Where Ember keeps conversations and the agent workspace. Relative
@@ -57,17 +90,25 @@ DEFAULT_CONFIG = {
     "max_tool_steps": 8,
     # Seconds before a run_command tool call is killed.
     "command_timeout": 120,
+    # A shell cannot be reliably confined to one drive on Windows. Packaged
+    # builds keep file tools but disable shell execution to honor portability.
+    "allow_commands": not (sys.platform == "win32" and getattr(sys, "frozen", False)),
     # Offline knowledge base (kiwix-serve with ZIM files: Wikipedia, dev
     # docs, ...). "auto" probes the default local port.
     "kiwix_url": "auto",
     "host": "127.0.0.1",
     "port": 8484,
+    # Packaged Windows builds replace this with false on first launch. Source
+    # checkouts retain the existing direct-to-terminal behavior.
+    "setup_complete": not (sys.platform == "win32" and getattr(sys, "frozen", False)),
 }
 
-KNOWN_BACKENDS = [
-    "http://127.0.0.1:11434",  # Ollama
-    "http://127.0.0.1:8080",   # llama.cpp llama-server
-]
+KNOWN_BACKENDS = ([PORTABLE_OLLAMA_URL]
+                  if sys.platform == "win32" and getattr(sys, "frozen", False)
+                  else [
+                      "http://127.0.0.1:11434",  # Ollama
+                      "http://127.0.0.1:8080",   # llama.cpp llama-server
+                  ])
 
 KNOWN_KIWIX = [
     "http://127.0.0.1:8181",   # kiwix-serve (started by start.sh / start.bat)
@@ -93,6 +134,23 @@ Available tools:
 Rules: paths are relative to the workspace; one tool call per reply; after a
 tool result arrives, continue the task or give your final answer. When the
 task is done, reply normally without any tool block.
+""".strip()
+
+PORTABLE_AGENT_PROMPT = """
+You can use tools to work on files inside a workspace directory on the xDrive.
+To call a tool, output one fenced block and then stop your reply:
+
+```tool
+{"tool": "write_file", "args": {"path": "notes.txt", "content": "..."}}
+```
+
+Available tools:
+- list_dir   {"path": "."}
+- read_file  {"path": "src/main.py"}
+- write_file {"path": "src/main.py", "content": "..."}
+
+All paths are relative to the drive-contained workspace. Shell commands are
+disabled in the portable Windows build so tools cannot write to another disk.
 """.strip()
 
 KNOWLEDGE_PROMPT = """
@@ -197,18 +255,18 @@ def list_conversations(cfg):
 # LLM backend (Ollama / llama.cpp — both speak the OpenAI chat API)
 # --------------------------------------------------------------------------
 
-def probe_backend(url):
+def probe_backend(url, timeout=2):
     """Return (kind, models) if an LLM runtime answers at `url`, else None."""
     # Ollama native endpoint gives us model names with sizes.
     try:
-        with urllib.request.urlopen(f"{url}/api/tags", timeout=2) as resp:
+        with urllib.request.urlopen(f"{url}/api/tags", timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             models = [m["name"] for m in data.get("models", [])]
             return ("ollama", models)
     except (urllib.error.URLError, json.JSONDecodeError, OSError, TimeoutError):
         pass
     try:
-        with urllib.request.urlopen(f"{url}/v1/models", timeout=2) as resp:
+        with urllib.request.urlopen(f"{url}/v1/models", timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             models = [m.get("id", "default") for m in data.get("data", [])]
             return ("openai", models)
@@ -239,6 +297,12 @@ def _cached_probe(key, ttl, fn):
 def clear_probe_cache():
     with _probe_lock:
         _probe_cache.clear()
+
+
+def reexec_application():
+    if getattr(sys, "frozen", False):
+        os.execv(sys.executable, [sys.executable])
+    os.execv(sys.executable, [sys.executable, str(Path(__file__).resolve())])
 
 
 def resolve_backend(cfg):
@@ -580,6 +644,28 @@ def pull_model_job(job_id, backend_url, model):
         job_update(job_id, status="error", detail=f"pull failed: {exc}")
 
 
+def install_ollama_job(job_id):
+    """Install the official portable Windows runtime into tools/ollama/."""
+    try:
+        def progress(done, total, detail):
+            job_update(job_id, done=done, total=total, detail=detail)
+
+        install_portable_ollama(progress)
+        job_update(job_id, detail="starting portable Ollama")
+        start_ollama()
+        clear_probe_cache()
+        # Give the local service a short window to bind before the wizard
+        # refreshes. A slower machine can continue polling without failing.
+        for _ in range(20):
+            if probe_backend(PORTABLE_OLLAMA_URL):
+                job_update(job_id, status="done", detail="portable Ollama is ready")
+                return
+            time.sleep(0.5)
+        job_update(job_id, status="done", detail="installed — runtime is starting")
+    except (OSError, ValueError, zipfile.BadZipFile) as exc:
+        job_update(job_id, status="error", detail=f"install failed: {exc}")
+
+
 def resolve_zim_file(rel):
     """Resolve 'devdocs/devdocs_en_python.zim' to the latest dated file.
 
@@ -608,10 +694,14 @@ def zim_stem_installed(lib, rel):
 
 def download_zim_job(job_id, files):
     """Download ZIM file(s) to library/ with resume support."""
-    lib = ROOT / "library"
+    lib = LIBRARY_DIR
     lib.mkdir(exist_ok=True)
     downloaded_any = False
     try:
+        if sys.platform == "win32" and not kiwix_binary():
+            def reader_progress(done, total, detail):
+                job_update(job_id, done=done, total=total, detail=detail)
+            install_portable_kiwix(reader_progress)
         for idx, rel in enumerate(files, 1):
             if zim_stem_installed(lib, rel):
                 continue
@@ -657,7 +747,8 @@ def download_zim_job(job_id, files):
         job_update(job_id, status="done",
                    detail="installed — knowledge base mounted" if mounted
                    else "installed")
-    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+    except (urllib.error.URLError, OSError, TimeoutError,
+            ValueError, zipfile.BadZipFile) as exc:
         job_update(job_id, status="error", detail=f"download failed: {exc}")
 
 
@@ -822,12 +913,13 @@ RUNNING_COMMIT = local_commit()
 # --------------------------------------------------------------------------
 
 def kiwix_binary():
-    found = shutil.which("kiwix-serve")
-    if found:
-        return found
-    bundled = ROOT / "tools" / "kiwix" / (
+    bundled = TOOLS_DIR / "kiwix" / (
         "kiwix-serve.exe" if sys.platform == "win32" else "kiwix-serve")
-    return str(bundled) if bundled.exists() else None
+    if bundled.exists():
+        return str(bundled)
+    if sys.platform == "win32" and getattr(sys, "frozen", False):
+        return None
+    return shutil.which("kiwix-serve")
 
 
 def restart_kiwix():
@@ -837,7 +929,7 @@ def restart_kiwix():
     finishes downloading so it mounts without any manual step.
     """
     binary = kiwix_binary()
-    zims = sorted((ROOT / "library").glob("*.zim"))
+    zims = sorted(LIBRARY_DIR.glob("*.zim"))
     if not binary or not zims:
         return False
     try:  # stop whatever instance is currently holding port 8181
@@ -1021,6 +1113,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path, _, query_string = self.path.partition("?")
+        if path == "/api/setup":
+            return self.handle_setup_status()
         if path == "/api/status":
             return self.handle_status()
         if path == "/api/knowledge/search":
@@ -1047,6 +1141,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/api/chat":
                 return self.handle_chat()
+            if path == "/api/setup/ollama":
+                return self.handle_setup_ollama()
+            if path == "/api/setup/finish":
+                return self.handle_setup_finish()
             if path == "/api/config":
                 return self.handle_put_config()
             if path == "/api/downloads/start":
@@ -1079,7 +1177,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def serve_static(self, path):
         if path in ("/", ""):
-            path = "/index.html"
+            path = ("/index.html" if load_config().get("setup_complete")
+                    else "/setup.html")
         target = (WEB_DIR / path.lstrip("/")).resolve()
         if WEB_DIR.resolve() not in target.parents or not target.is_file():
             return self.send_json({"error": "not found"}, 404)
@@ -1091,6 +1190,61 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     # ---- API handlers ---------------------------------------------------
+
+    def handle_setup_status(self):
+        cfg = load_config()
+        writable = False
+        try:
+            check = ROOT / ".xdrive-write-test"
+            check.write_text("ok", encoding="utf-8")
+            check.unlink()
+            writable = True
+        except OSError:
+            pass
+        portable_installed = portable_ollama_binary().is_file()
+        found = (probe_backend(PORTABLE_OLLAMA_URL, timeout=0.35)
+                 if portable_installed else None)
+        backend_url = PORTABLE_OLLAMA_URL if found else None
+        backend_kind, models = found if found else (None, [])
+        with _jobs_lock:
+            jobs = {k: {kk: vv for kk, vv in v.items() if kk != "cancel"}
+                    for k, v in JOBS.items() if k.startswith("setup:")
+                    or k.startswith("model:")}
+        du = shutil.disk_usage(ROOT)
+        self.send_json({
+            "complete": bool(cfg.get("setup_complete")),
+            "drive_root": str(ROOT),
+            "drive_writable": writable,
+            "drive_free": du.free,
+            "ollama_installed": portable_installed,
+            "ollama_online": backend_url is not None,
+            "backend_kind": backend_kind,
+            "models": models,
+            "jobs": jobs,
+        })
+
+    def handle_setup_ollama(self):
+        if sys.platform != "win32":
+            return self.send_json({"error": "portable Ollama setup is Windows-only"}, 400)
+        if portable_ollama_binary().is_file():
+            start_ollama()
+            clear_probe_cache()
+            return self.send_json({"ok": True, "started": False,
+                                   "detail": "portable Ollama already installed"})
+        started = start_job("setup:ollama", install_ollama_job)
+        self.send_json({"ok": True, "started": started})
+
+    def handle_setup_finish(self):
+        body = self.read_json()
+        cfg = load_config()
+        model = str(body.get("default_model") or "").strip()
+        if model:
+            cfg["default_model"] = model
+        cfg["setup_complete"] = True
+        # Portable data storage is fixed to the executable's drive.
+        cfg["data_dir"] = "data"
+        save_config(cfg)
+        self.send_json({"ok": True, "redirect": "/index.html"})
 
     def handle_status(self):
         cfg = load_config()
@@ -1109,6 +1263,7 @@ class Handler(BaseHTTPRequestHandler):
             "kiwix_books": kx_books,  # [{name, title}] — name keys the viewer URL
             # lets the launcher detect a stale process without touching GitHub
             "running_commit": (RUNNING_COMMIT or "")[:12],
+            "command_enabled": bool(cfg.get("allow_commands", True)),
         })
 
     def handle_system(self):
@@ -1128,7 +1283,7 @@ class Handler(BaseHTTPRequestHandler):
         cfg = load_config()
         _, _, installed_models = resolve_backend(cfg)
         installed = set(installed_models)
-        lib = ROOT / "library"
+        lib = LIBRARY_DIR
         models = [{**m, "installed": m["id"] in installed} for m in MODEL_CATALOG]
         zims = [{"id": z["id"], "title": z["title"], "size": z["size"],
                  "cat": z.get("cat", ""),
@@ -1188,8 +1343,7 @@ class Handler(BaseHTTPRequestHandler):
             def _re_exec():
                 time.sleep(0.6)
                 clear_probe_cache()
-                os.execv(sys.executable,
-                         [sys.executable, str(Path(__file__).resolve())])
+                reexec_application()
 
             threading.Thread(target=_re_exec, daemon=True).start()
             return
@@ -1202,8 +1356,7 @@ class Handler(BaseHTTPRequestHandler):
         def _re_exec():
             time.sleep(0.6)
             clear_probe_cache()
-            os.execv(sys.executable,
-                     [sys.executable, str(Path(__file__).resolve())])
+            reexec_application()
 
         threading.Thread(target=_re_exec, daemon=True).start()
 
@@ -1310,6 +1463,8 @@ class Handler(BaseHTTPRequestHandler):
         kiwix = (None, [])
         if agent_mode:
             allowed_tools |= FILE_TOOLS
+            if not cfg.get("allow_commands", True):
+                allowed_tools.discard("run_command")
         if agent_mode or research_mode:
             kiwix = resolve_kiwix(cfg)
             if kiwix[0]:
@@ -1329,7 +1484,9 @@ class Handler(BaseHTTPRequestHandler):
 
         system_prompt = cfg.get("system_prompt", "")
         if agent_mode:
-            system_prompt = f"{system_prompt}\n\n{AGENT_PROMPT}"
+            agent_prompt = (AGENT_PROMPT if cfg.get("allow_commands", True)
+                            else PORTABLE_AGENT_PROMPT)
+            system_prompt = f"{system_prompt}\n\n{agent_prompt}"
         if KNOWLEDGE_TOOLS & allowed_tools:
             system_prompt = f"{system_prompt}\n\n{KNOWLEDGE_PROMPT}"
 
@@ -1404,11 +1561,18 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    prepare_portable_environment()
     cfg = load_config()
     if not CONFIG_PATH.exists():
         save_config(cfg)
     conversations_dir(cfg)
     workspace_dir(cfg)
+    # The packaged Windows app ships without installers. If the first-run
+    # wizard has already downloaded portable Ollama, bring it up automatically.
+    if (sys.platform == "win32" and getattr(sys, "frozen", False)
+            and ollama_binary()):
+        if probe_backend(PORTABLE_OLLAMA_URL) is None:
+            start_ollama()
     ensure_kiwix(cfg)
 
     host = cfg.get("host", "127.0.0.1")

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>xDrive — First Run Setup</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/setup.css">
+</head>
+<body class="setup-body">
+  <main class="setup-shell">
+    <header class="setup-brand">
+      <span class="brand-mark">x</span>
+      <div>
+        <h1>xDRIVE</h1>
+        <p>PORTABLE WINDOWS 11 SETUP</p>
+      </div>
+      <span class="setup-local">LOCAL · PRIVATE · DRIVE-BOUND</span>
+    </header>
+
+    <section class="setup-hero">
+      <div>
+        <span class="eyebrow">WELCOME</span>
+        <h2>Your AI lives on this drive.</h2>
+        <p>xDrive keeps its models, conversations, workspace, browser profile,
+          downloads, and temporary files beside the application. Nothing needs
+          to be installed into your Windows account.</p>
+      </div>
+      <div class="drive-card">
+        <span>PORTABLE DRIVE</span>
+        <strong id="drive-root">detecting…</strong>
+        <small id="drive-space">checking writable space…</small>
+      </div>
+    </section>
+
+    <section class="setup-grid">
+      <article class="setup-step" id="step-storage">
+        <div class="step-number">01</div>
+        <div class="step-content">
+          <h3>Verify portable storage</h3>
+          <p>xDrive checks that it can write to this drive. The folder can be
+            moved later without reconfiguring paths.</p>
+          <div class="step-status" id="storage-status">CHECKING…</div>
+        </div>
+      </article>
+
+      <article class="setup-step" id="step-runtime">
+        <div class="step-number">02</div>
+        <div class="step-content">
+          <h3>Add the local AI engine</h3>
+          <p>Download the official portable Ollama runtime into
+            <code>tools\ollama</code> on this drive.</p>
+          <button class="setup-button" id="install-runtime" disabled>INSTALL PORTABLE OLLAMA</button>
+          <div class="progress" id="runtime-progress" hidden><span></span></div>
+          <div class="step-status" id="runtime-status">WAITING FOR DRIVE CHECK</div>
+        </div>
+      </article>
+
+      <article class="setup-step" id="step-model">
+        <div class="step-number">03</div>
+        <div class="step-content">
+          <h3>Choose your starter model</h3>
+          <p>You can add larger models and offline Wikipedia later from
+            <strong>GET MORE</strong>.</p>
+          <label class="model-choice">
+            <input type="radio" name="model" value="qwen2.5:3b" checked>
+            <span><b>FAST · 3B</b><small>~2 GB · best for 8 GB RAM</small></span>
+          </label>
+          <label class="model-choice">
+            <input type="radio" name="model" value="qwen2.5-coder:7b">
+            <span><b>CODER · 7B</b><small>~5 GB · recommended for 16 GB RAM</small></span>
+          </label>
+          <label class="model-choice">
+            <input type="radio" name="model" value="qwen2.5:14b">
+            <span><b>SMART · 14B</b><small>~9 GB · recommended for 24 GB+ RAM</small></span>
+          </label>
+          <button class="setup-button" id="install-model" disabled>DOWNLOAD SELECTED MODEL</button>
+          <div class="progress" id="model-progress" hidden><span></span></div>
+          <div class="step-status" id="model-status">INSTALL THE RUNTIME FIRST</div>
+        </div>
+      </article>
+    </section>
+
+    <footer class="setup-footer">
+      <div>
+        <b>NO CLOUD ACCOUNT REQUIRED</b>
+        <span>Internet is only needed for the downloads you choose.</span>
+      </div>
+      <button class="setup-button primary" id="finish" disabled>OPEN XDRIVE →</button>
+    </footer>
+  </main>
+  <script src="/setup.js"></script>
+</body>
+</html>
